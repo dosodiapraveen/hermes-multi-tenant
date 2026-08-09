@@ -38,6 +38,7 @@ services:
       - /opt/hermes:/opt/hermes
       - /usr/local/bin/hermes:/usr/local/bin/hermes:ro
       - /usr/local/lib/hermes-agent:/usr/local/lib/hermes-agent:ro
+      - /root/.hermes:/root/.hermes:ro
 
   frontend:
     build: ./frontend

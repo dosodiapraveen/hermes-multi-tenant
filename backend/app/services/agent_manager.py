@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Constants
 PROFILES_ROOT = Path("/opt/hermes/profiles")
 HERMES_BIN = "/usr/local/lib/hermes-agent/cli.py"
-HERMES_PYTHON = "/usr/local/bin/python3"
+HERMES_PYTHON = "/usr/local/lib/hermes-agent/venv/bin/python3"
 HERMES_TIMEOUT = 60  # seconds per query
 
 
