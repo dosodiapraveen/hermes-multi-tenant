@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 # Constants
 PROFILES_ROOT = Path("/opt/hermes/profiles")
-HERMES_BIN = "/usr/local/lib/hermes-agent/cli.py"
-HERMES_PYTHON = "/usr/local/lib/hermes-agent/venv/bin/python3"
+HERMES_BIN = "/usr/local/bin/hermes"
+HERMES_PYTHON = None
 HERMES_TIMEOUT = 60  # seconds per query
 
 
@@ -55,14 +55,10 @@ async def hermes_profile_chat(
         )
 
     # Build the command
-    cmd = [
-        HERMES_PYTHON,
-        HERMES_BIN,
-        "chat",
+    cmd = [HERMES_BIN, "chat",
         "--query", message,
         "--in", str(profile_path),
-        "--no-restore-cwd",
-        "-Q",  # Quiet mode: suppress banner, spinner, tool previews
+        "--no-restore-cwd", "-Q",
     ]
 
     logger.info(
