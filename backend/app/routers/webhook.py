@@ -50,16 +50,29 @@ async def _api(model:str,msg:str)->str:
     if model.startswith("claude"):
         if not settings.anthropic_api_key: return "Agent ready! (API pending)"
         async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.post("https://api.anthropic.com/v1/messages",headers={"x-api-key":settings.anthropic_api_key,"anthropic-version":"2023-06-01","content-type":"application/json"},json={"model":model,"max_tokens":1024,"messages":[{"role":"user","content":msg}]})
+            r = await c.post("https://api.anthropic.com/v1/messages",
+                headers={"x-api-key":settings.anthropic_api_key,"anthropic-version":"2023-06-01","content-type":"application/json"},
+                json={"model":model,"max_tokens":1024,"messages":[{"role":"user","content":msg}]})
             return r.json()["content"][0]["text"]
     if model.startswith("gpt"):
         if not settings.openai_api_key: return "Agent ready! (API pending)"
         async with httpx.AsyncClient(timeout=30) as c:
-            r = await c.post("https://api.openai.com/v1/chat/completions",headers={"Authorization":f"Bearer {settings.openai_api_key}","content-type":"application/json"},json={"model":model,"max_tokens":1024,"messages":[{"role":"user","content":msg}]})
+            r = await c.post("https://api.openai.com/v1/chat/completions",
+                headers={"Authorization":f"Bearer {settings.openai_api_key}","content-type":"application/json"},
+                json={"model":model,"max_tokens":1024,"messages":[{"role":"user","content":msg}]})
+            return r.json()["choices"][0]["message"]["content"]
+    if "fireworks" in model or model.startswith("accounts/"):
+        if not settings.fireworks_api_key: return "Agent ready! (API pending)"
+        async with httpx.AsyncClient(timeout=30) as c:
+            r = await c.post("https://api.fireworks.ai/inference/v1/chat/completions",
+                headers={"Authorization":f"Bearer {settings.fireworks_api_key}","content-type":"application/json"},
+                json={"model":model,"max_tokens":1024,"messages":[{"role":"user","content":msg}]})
             return r.json()["choices"][0]["message"]["content"]
     return "Agent ready!"
 
 async def _send_wa(to:str,text:str):
     if not settings.whatsapp_api_token: return
     async with httpx.AsyncClient(timeout=10) as c:
-        await c.post(f"https://graph.facebook.com/v21.0/{settings.whatsapp_phone_number_id}/messages",headers={"Authorization":f"Bearer {settings.whatsapp_api_token}","Content-Type":"application/json"},json={"messaging_product":"whatsapp","to":to,"type":"text","text":{"body":text}})
+        await c.post(f"https://graph.facebook.com/v21.0/{settings.whatsapp_phone_number_id}/messages",
+            headers={"Authorization":f"Bearer {settings.whatsapp_api_token}","Content-Type":"application/json"},
+            json={"messaging_product":"whatsapp","to":to,"type":"text","text":{"body":text}})
