@@ -10,7 +10,7 @@
         <div class="field"><label>Plan</label>
           <select v-model="form.plan"><option value="trial">Trial</option><option value="basic">Basic ($5)</option><option value="pro" selected>Pro ($15)</option><option value="business">Business ($35)</option><option value="vip">VIP</option></select></div>
         <div class="field"><label>Trial Days</label>
-          <select v-model="form.trial_days"><option :value="7">7 days</option><option :value="14">14 days</option><option :value="30">30 days</option><option :value="">No expiry</option></select></div>
+          <select v-model="form.trial_days"><option :value="7">7 days</option><option :value="14">14 days</option><option :value="30">30 days</option><option value="">No expiry</option></select></div>
       </div>
       <button @click="generate" class="btn" :disabled="loading">{{ loading ? 'Generating...' : 'Generate' }}</button>
     </div>
