@@ -1,234 +1,72 @@
 <template>
-  <div class="users-page">
-    <div class="page-header">
-      <h1>Users</h1>
-      <p>Manage all registered users</p>
-    </div>
-    <div v-if="loading" class="loading-state">Loading users...</div>
-    <div v-else class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Phone</th>
-            <th>Agent</th>
-            <th>Plan</th>
-            <th>Status</th>
-            <th>Model</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="users.length === 0">
-            <td colspan="5" class="empty-state">No users found</td>
-          </tr>
-          <tr v-for="user in users" :key="user.id || user.phone">
-            <td class="cell-phone">{{ user.phone || user.phone_number || '-' }}</td>
-            <td class="cell-agent">{{ user.agent_name || user.agent || '-' }}</td>
-            <td>
-              <span class="plan-badge" :class="planClass(user.plan || user.subscription_plan)">
-                {{ user.plan || user.subscription_plan || 'free' }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="statusClass(user.status || user.is_active)">
-                {{ formatStatus(user.status || user.is_active) }}
-              </span>
-            </td>
-            <td class="cell-model">{{ user.model || '-' }}</td>
-          </tr>
-        </tbody>
-      </table>
+  <div>
+    <h2>Users</h2>
+    <p class="sub">Manage user profiles</p>
+    <table>
+      <thead><tr><th>Phone</th><th>Agent</th><th>Plan</th><th>Status</th><th>Model</th><th></th></tr></thead>
+      <tbody>
+        <tr v-for="u in users" :key="u.id">
+          <td>{{ u.phone_number || '—' }}</td>
+          <td>{{ u.agent_name }}</td>
+          <td><span class="badge">{{ u.plan }}</span></td>
+          <td><span :class="u.is_active ? 'green' : 'muted'">{{ u.is_active ? 'Active' : 'Inactive' }}</span></td>
+          <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis">{{ u.primary_model }}</td>
+          <td><button class="btn-del" @click="confirmDelete(u)">Delete</button></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Confirmation Dialog -->
+    <div v-if="showDialog" class="overlay" @click.self="showDialog=false">
+      <div class="dialog">
+        <h3>Delete User?</h3>
+        <p>This will permanently delete <strong>{{ deletingUser?.agent_name }}</strong> ({{ deletingUser?.phone_number || 'no phone' }}).</p>
+        <p style="font-size:13px;color:#636E70;margin-top:8px;">The Hermes profile, Obsidian vault, invite links, and all activity logs will be removed. This cannot be undone.</p>
+        <div class="dialog-actions">
+          <button class="btn-cancel" @click="showDialog=false">Cancel</button>
+          <button class="btn-del" @click="doDelete" :disabled="deleting">{{ deleting ? 'Deleting...' : 'Delete' }}</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 export default {
-  name: 'UsersView',
-  data() {
-    return {
-      loading: true,
-      users: [],
+  data() { return { users:[], showDialog:false, deletingUser:null, deleting:false }},
+  methods: {
+    tok() { return 'Bearer '+localStorage.getItem('token') },
+    async load() { const r=await fetch('/api/admin/users',{headers:{'Authorization':this.tok()}}); this.users=await r.json() },
+    confirmDelete(u) { this.deletingUser=u; this.showDialog=true; this.deleting=false },
+    async doDelete() {
+      this.deleting=true
+      try {
+        const r=await fetch('/api/admin/users/'+this.deletingUser.id,{method:'DELETE',headers:{'Authorization':this.tok()}})
+        if(!r.ok) throw new Error('Delete failed')
+        this.users=this.users.filter(u=>u.id!==this.deletingUser.id)
+        this.showDialog=false; this.deletingUser=null
+      } catch(e) { alert('Failed to delete user') }
+      finally { this.deleting=false }
     }
   },
-  async mounted() {
-    await this.fetchUsers()
-  },
-  methods: {
-    async fetchUsers() {
-      this.loading = true
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch('/api/admin/users', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.status === 401) {
-          localStorage.removeItem('token')
-          this.$router.push('/login')
-          return
-        }
-        if (!res.ok) throw new Error('Failed to fetch users')
-        const data = await res.json()
-        this.users = Array.isArray(data) ? data : (data.users || data.data || [])
-      } catch (err) {
-        console.error('Users error:', err)
-      } finally {
-        this.loading = false
-      }
-    },
-    planClass(plan) {
-      if (!plan) return ''
-      const p = plan.toLowerCase()
-      if (p === 'pro' || p === 'business') return 'badge-pro'
-      if (p === 'basic') return 'badge-basic'
-      if (p === 'trial') return 'badge-trial'
-      return ''
-    },
-    statusClass(status) {
-      if (status === true || status === 'active' || status === 1) return 'status-active'
-      return 'status-inactive'
-    },
-    formatStatus(status) {
-      if (status === true || status === 1) return 'Active'
-      if (status === false || status === 0) return 'Inactive'
-      return status || 'Unknown'
-    },
-  },
+  mounted() { this.load() }
 }
 </script>
 
 <style scoped>
-.users-page {
-  max-width: 1100px;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-header h1 {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1A1A2E;
-  margin-bottom: 4px;
-}
-
-.page-header p {
-  font-size: 14px;
-  color: #636E70;
-}
-
-.loading-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #636E70;
-  font-size: 15px;
-}
-
-.table-container {
-  background: #fff;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-.data-table thead {
-  background: #F8FAFC;
-}
-
-.data-table th {
-  padding: 14px 20px;
-  text-align: left;
-  font-weight: 600;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #636E70;
-  border-bottom: 1px solid #E2E8F0;
-}
-
-.data-table td {
-  padding: 14px 20px;
-  color: #1A1A2E;
-  border-bottom: 1px solid #F0F2F5;
-}
-
-.data-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.data-table tbody tr:hover {
-  background: #FAFBFC;
-}
-
-.cell-phone {
-  font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 13px;
-}
-
-.cell-agent {
-  font-weight: 500;
-}
-
-.cell-model {
-  font-family: 'SF Mono', 'Menlo', monospace;
-  font-size: 13px;
-  color: #636E70;
-}
-
-.plan-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: capitalize;
-  background: #F0F2F5;
-  color: #636E70;
-}
-
-.plan-badge.badge-trial {
-  background: rgba(108, 92, 231, 0.1);
-  color: #6C5CE7;
-}
-
-.plan-badge.badge-basic {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3B82F6;
-}
-
-.plan-badge.badge-pro {
-  background: rgba(0, 200, 117, 0.1);
-  color: #00C875;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-active {
-  background: rgba(0, 200, 117, 0.1);
-  color: #00C875;
-}
-
-.status-inactive {
-  background: rgba(255, 107, 107, 0.1);
-  color: #E53E3E;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px 20px !important;
-  color: #636E70;
-  font-size: 14px;
-}
+table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; }
+th { text-align:left; padding:12px 16px; font-size:11px; text-transform:uppercase; color:#636E70; background:#F8F9FA; border-bottom:1px solid #DFE6E9; }
+td { padding:12px 16px; border-bottom:1px solid #DFE6E9; font-size:13px; }
+.badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#F0F2F5; }
+.green { color:#00B894; font-weight:500; }
+.muted { color:#B2BEC3; }
+.btn-del { padding:5px 12px; border:none; border-radius:6px; background:rgba(225,112,85,0.1); color:#E17055; font-size:12px; font-weight:500; cursor:pointer; }
+.btn-del:hover { background:rgba(225,112,85,0.2); }
+.overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.dialog { background:white; border-radius:14px; padding:28px; max-width:420px; width:90%; }
+.dialog h3 { font-size:18px; font-weight:700; margin-bottom:8px; }
+.dialog p { font-size:14px; color:#1A1A2E; }
+.dialog-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+.btn-cancel { padding:9px 20px; border:1.5px solid #DFE6E9; border-radius:8px; background:white; font-size:13px; font-weight:500; cursor:pointer; }
+.btn-cancel:hover { border-color:#636E70; }
 </style>

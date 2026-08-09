@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import secrets
+import shutil, os
 from app.database import get_db
 from app.auth import require_admin
 from app.models.schemas import InviteLinkCreate
@@ -67,6 +68,33 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
         "vault_path": vault_path,
         "profile_status": profile_status,
     }
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete a user, their Hermes profile, Obsidian vault, and logs."""
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+    user = r.fetchone()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    # Delete profile and vault from disk
+    profile_path = user[1]
+    if profile_path:
+        vault_path = profile_path.replace("/profiles/", "/obsidian/")
+        if os.path.exists(profile_path):
+            shutil.rmtree(profile_path)
+        if os.path.exists(vault_path):
+            shutil.rmtree(vault_path)
+
+    # Delete from DB (cascade to activity_logs, invite_links)
+    await db.execute(text("DELETE FROM activity_logs WHERE user_id=:uid"), {"uid": user_id})
+    await db.execute(text("UPDATE invite_links SET claimed_by=NULL, claimed_at=NULL WHERE claimed_by=:uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES ('system', 'user_deleted', :det)"),
+        {"det": f'{{"deleted_user":"{user_id}"}}'})
+
+    return {"status": "deleted", "user_id": user_id}
 
 @router.post("/invite-links")
 async def create_invite(body: InviteLinkCreate, db: AsyncSession = Depends(get_db)):
