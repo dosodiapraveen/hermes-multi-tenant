@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hermes — Onboarding Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --purple: #6C5CE7;
+  --purple-dark: #5A4BD1;
+  --purple-light: #A29BFE;
+  --teal: #00CEC9;
+  --bg: #F0F2F5;
+  --surface: #FFFFFF;
+  --surface-alt: #F8F9FA;
+  --text-primary: #1A1A2E;
+  --text-secondary: #636E72;
+  --text-muted: #B2BEC3;
+  --border: #DFE6E9;
+  --success: #00B894;
+  --warning: #FDCB6E;
+  --error: #E17055;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.06);
+  --whatsapp: #25D366;
+  --whatsapp-dark: #128C7E;
+}
+body {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  padding: 40px 20px;
+}
+.container { max-width: 1100px; margin: 0 auto; }
+h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 32px; }
+
+/* ===== TWO-PANEL LAYOUT ===== */
+.two-panel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+@media (max-width: 800px) {
+  .two-panel { grid-template-columns: 1fr; }
+}
+
+/* ===== PANEL STYLES ===== */
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.panel-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.panel-icon.purple { background: rgba(108,92,231,0.1); }
+.panel-icon.green { background: rgba(37,211,102,0.15); }
+.panel-title { font-size: 14px; font-weight: 600; flex: 1; }
+.panel-body { padding: 20px; }
+
+/* ===== ADMIN: LINK GENERATOR ===== */
+.link-form { margin-bottom: 20px; }
+.form-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.form-group { flex: 1; min-width: 180px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.form-input, .form-select {
+  width: 100%;
+  height: 40px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text-primary);
+  outline: none;
+  transition: border 0.15s;
+}
+.form-input:focus, .form-select:focus { border-color: var(--purple); }
+.form-select { cursor: pointer; }
+
+/* Generated Links */
+.generated-links { margin-top: 16px; }
+.link-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface-alt);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.link-item .link-url {
+  flex: 1;
+  font-family: 'SF Mono', monospace;
+  font-size: 12px;
+  color: var(--purple);
+  word-break: break-all;
+}
+.link-item .link-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.link-status.active { background: rgba(0,184,148,0.1); color: var(--success); }
+.link-status.expired { background: rgba(225,112,85,0.1); color: var(--error); }
+.link-status.claimed { background: rgba(108,92,231,0.1); color: var(--purple); }
+.link-copy-btn {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: var(--purple);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.link-copy-btn:hover { background: var(--purple-dark); }
+
+/* ===== ADMIN: MODEL CONFIG ===== */
+.model-config { }
+.config-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+.config-card.selected { border-color: var(--purple); background: rgba(108,92,231,0.03); }
+.config-card.backup { border-color: var(--teal); background: rgba(0,206,201,0.03); }
+.config-card-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.config-card-number.primary { background: var(--purple); color: white; }
+.config-card-number.backup { background: var(--teal); color: white; }
+.config-card-info { flex: 1; }
+.config-card-name { font-size: 14px; font-weight: 600; }
+.config-card-desc { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+.config-card-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.config-card-badge.primary-label { background: rgba(108,92,231,0.1); color: var(--purple); }
+.config-card-badge.backup-label { background: rgba(0,206,201,0.1); color: var(--teal); }
+.config-card select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--surface);
+}
+
+/* ===== PHONE FRAME (WhatsApp) ===== */
+.phone-wrapper {
+  display: flex;
+  justify-content: center;
+}
+.phone {
+  width: 360px;
+  background: var(--surface);
+  border-radius: 32px;
+  overflow: hidden;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.12);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.phone-header {
+  background: var(--whatsapp-dark);
+  padding: 14px 16px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.phone-header .back { color: white; font-size: 18px; }
+.phone-header .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+.phone-header .contact-info { flex: 1; }
+.phone-header .contact-name { color: white; font-size: 15px; font-weight: 600; }
+.phone-header .contact-status { color: rgba(255,255,255,0.7); font-size: 11px; }
+.phone-header .header-icons { color: white; font-size: 18px; display: flex; gap: 12px; }
+
+.phone-chat {
+  background: #E5DDD5;
+  padding: 10px 14px;
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4c9bc' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.phone-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border-top: 1px solid #E0D6CC;
+}
+.phone-input .input-field {
+  flex: 1;
+  height: 40px;
+  border: none;
+  border-radius: 20px;
+  background: var(--surface);
+  padding: 0 14px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.phone-input .send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--whatsapp);
+  color: white;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+/* WhatsApp Bubbles */
+.bubble {
+  max-width: 80%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  position: relative;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.bubble.bot {
+  background: white;
+  align-self: flex-start;
+  border-top-left-radius: 2px;
+  color: var(--text-primary);
+}
+.bubble.bot::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -6px;
+  border-width: 0 8px 8px 0;
+  border-style: solid;
+  border-color: transparent white transparent transparent;
+}
+.bubble.user {
+  background: #DCF8C6;
+  align-self: flex-end;
+  border-top-right-radius: 2px;
+  color: var(--text-primary);
+}
+.bubble .time {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 2px;
+}
+.bubble .emoji-big { font-size: 28px; display: block; margin-bottom: 4px; }
+.bubble .option-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  text-align: left;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: all 0.15s;
+}
+.bubble .option-btn:hover { border-color: var(--purple); background: rgba(108,92,231,0.03); }
+.bubble .option-btn.selected { border-color: var(--whatsapp); background: rgba(37,211,102,0.08); }
+.bubble .pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  margin: 2px;
+}
+.pill.purple { background: rgba(108,92,231,0.1); color: var(--purple); }
+
+/* Done screen */
+.done-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+.done-screen .big-icon { font-size: 64px; margin-bottom: 16px; }
+.done-screen h2 { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+.done-screen p { font-size: 14px; color: var(--text-secondary); max-width: 400px; }
+
+/* ===== FLOW ARROW ===== */
+.flow-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: var(--text-muted);
+  padding: 0 10px;
+}
+@media (max-width: 800px) {
+  .flow-arrow { transform: rotate(90deg); padding: 10px 0; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Onboarding Flow</h1>
+  <p class="subtitle">Admin generates invite links → User clicks → Onboarded on WhatsApp. No model selection. No web signup.</p>
+
+  <div class="two-panel">
+
+    <!-- LEFT: Admin Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-icon purple">⚙️</span>
+        <span class="panel-title">Admin — Invite Links & Model Config</span>
+      </div>
+      <div class="panel-body">
+
+        <!-- Model Config Section -->
+        <div style="margin-bottom:24px; padding-bottom:20px; border-bottom:1px solid var(--border);">
+          <div style="font-size:13px; font-weight:600; margin-bottom:12px;">🧠 Model Configuration (applies to all profiles)</div>
+          
+          <div class="config-card selected">
+            <span class="config-card-number primary">1</span>
+            <div class="config-card-info">
+              <div class="config-card-name">Primary Model</div>
+              <div class="config-card-desc">Default model for all users. Fallback if this fails.</div>
+            </div>
+            <select style="width:160px;">
+              <option selected>claude-sonnet-4-2026</option>
+              <option>gpt-5</option>
+              <option>accounts/fireworks/models/deepseek-v4</option>
+              <option>gemini-2.5-pro</option>
+            </select>
+            <span class="config-card-badge primary-label">Default</span>
+          </div>
+
+          <div class="config-card backup">
+            <span class="config-card-number backup">2</span>
+            <div class="config-card-info">
+              <div class="config-card-name">Backup Model</div>
+              <div class="config-card-desc">Used when primary is rate-limited, down, or errors out.</div>
+            </div>
+            <select style="width:160px;">
+              <option>gpt-5</option>
+              <option>claude-sonnet-4-2026</option>
+              <option selected>accounts/fireworks/models/deepseek-v4</option>
+              <option>gemini-2.5-pro</option>
+            </select>
+            <span class="config-card-badge backup-label">Auto-fallback</span>
+          </div>
+
+          <div style="font-size:11px; color: var(--text-muted); margin-top:8px;">
+            ↳ Users always get the primary model. Backup kicks in automatically if primary fails. Admin can override per user in user settings.
+          </div>
+        </div>
+
+        <!-- Invite Link Generator -->
+        <div style="font-size:13px; font-weight:600; margin-bottom:12px;">🔗 Generate Invite Links</div>
+        <div class="link-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Agent Name</label>
+              <input class="form-input" placeholder="e.g. My Assistant" value="My Assistant">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Trial Duration</label>
+              <select class="form-select">
+                <option>7 days</option>
+                <option>14 days</option>
+                <option>30 days</option>
+                <option value="0">🚀 No expiry (special user)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Plan after trial</label>
+              <select class="form-select">
+                <option selected>Pro ($15/mo)</option>
+                <option>Basic ($5/mo)</option>
+                <option>Business ($35/mo)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Note (internal)</label>
+              <input class="form-input" placeholder="e.g. Dr. Sharma referral">
+            </div>
+          </div>
+          <button class="config-card" style="cursor:pointer;border:1.5px dashed var(--purple);justify-content:center;gap:6px;background:rgba(108,92,231,0.03);">
+            <span style="font-size:16px;">＋</span>
+            <span style="font-weight:600;font-size:13px;color:var(--purple);">Generate Link</span>
+          </button>
+        </div>
+
+        <!-- Generated Links List -->
+        <div class="generated-links">
+          <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Recent Links (3)</div>
+          
+          <div class="link-item">
+            <span style="font-size:14px;">🔗</span>
+            <span class="link-url">hermes.io/join/abc123xyz</span>
+            <span class="link-status active">● 7 days left</span>
+            <button class="link-copy-btn">Copy</button>
+          </div>
+          
+          <div class="link-item">
+            <span style="font-size:14px;">🔗</span>
+            <span class="link-url">hermes.io/join/special-doc01</span>
+            <span class="link-status claimed">● Claimed</span>
+            <button class="link-copy-btn" style="opacity:0.5;">Copy</button>
+          </div>
+          
+          <div class="link-item">
+            <span style="font-size:14px;">🔗</span>
+            <span class="link-url">hermes.io/join/permanent-vip</span>
+            <span class="link-status active" style="background:rgba(253,203,110,0.15);color:#8B7300;">♾️ No expiry</span>
+            <button class="link-copy-btn">Copy</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT: WhatsApp Onboarding -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-icon green">💬</span>
+        <span class="panel-title">User Experience — WhatsApp Onboarding</span>
+        <span style="font-size:11px;color:var(--text-secondary);">User clicks invite link → WhatsApp opens</span>
+      </div>
+      <div class="panel-body" style="padding:12px;">
+        <div class="phone-wrapper">
+          <div class="phone">
+            
+            <!-- WhatsApp Header -->
+            <div class="phone-header">
+              <span class="back">←</span>
+              <div class="avatar">🤖</div>
+              <div class="contact-info">
+                <div class="contact-name">Hermes Agent</div>
+                <div class="contact-status">online</div>
+              </div>
+              <div class="header-icons">
+                <span>📞</span>
+                <span>⋮</span>
+              </div>
+            </div>
+
+            <!-- Chat -->
+            <div class="phone-chat">
+
+              <!-- Message 1: Bot welcome -->
+              <div class="bubble bot">
+                <div class="emoji-big">👋</div>
+                Hey! Welcome to Hermes.<br><br>
+                I'll create your personal AI agent right here. No app to download, no password to remember.<br><br>
+                First — what should I call your agent?
+                <div class="time">10:02 AM</div>
+              </div>
+
+              <!-- Message 2: User reply -->
+              <div class="bubble user">
+                My Assistant
+                <div class="time">10:02 AM</div>
+              </div>
+
+              <!-- Message 3: Bot confirms name -->
+              <div class="bubble bot">
+                ✅ Great! Your agent is "My Assistant".<br><br>
+                That's it. You're all set.<br><br>
+                You can now chat with me like any WhatsApp contact. Try saying:
+                <div class="time">10:02 AM</div>
+              </div>
+
+              <!-- Message 4: Bot shows examples -->
+              <div class="bubble bot">
+                <span class="pill purple">🔍 What's the latest AI news?</span><br>
+                <span class="pill purple">📝 Note this idea for later</span><br>
+                <span class="pill purple">⚡ Remind me to call Sarah tomorrow</span><br>
+                <span class="pill purple">🌐 Summarize this article [link]</span>
+                <div class="time">10:02 AM</div>
+              </div>
+
+              <!-- Message 5: Trial info -->
+              <div class="bubble bot">
+                🎁 Your <strong>7-day free trial</strong> is active.<br><br>
+                On day 5, I'll remind you about the subscription. No card needed yet.<br><br>
+                For advanced settings: <span style="color:var(--purple);">hermes.io/dashboard</span>
+                <div class="time">10:02 AM</div>
+              </div>
+
+              <!-- Message 6: User tests it -->
+              <div class="bubble user">
+                Note this idea for building a second opinion healthcare platform
+                <div class="time">10:03 AM</div>
+              </div>
+
+              <!-- Message 7: Bot responds -->
+              <div class="bubble bot">
+                📝 Saved to your vault!<br><br>
+                *Second Opinion Healthcare Platform*<br>
+                • Build a platform connecting patients with specialists for independent medical second opinions<br>
+                • India market: 60%+ cancer diagnosed late, 80% rural specialist shortfall<br>
+                • Use a tiered model: junior doctors review, senior consultants sign off<br><br>
+                You can ask me to expand on this anytime.
+                <div class="time">10:03 AM</div>
+              </div>
+
+            </div>
+
+            <!-- Input -->
+            <div class="phone-input">
+              <span style="font-size:20px;color:var(--text-muted);">😊</span>
+              <input class="input-field" placeholder="Type a message" value="Note this idea for building a second opinion">
+              <button class="send-btn">➤</button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Summary -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Step 1: Admin</div>
+      <div style="font-size:13px;">Admin generates invite link with trial duration or no expiry. Sets primary + backup model. Sends link to user.</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Step 2: User Clicks Link</div>
+      <div style="font-size:13px;">WhatsApp opens. User names their agent → Done. 2 messages, 30 seconds. Model is pre-configured by admin.</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Step 3: Agent is Live</div>
+      <div style="font-size:13px;">User starts chatting. Agent uses admin-set primary model. Backup kicks in automatically if primary fails. Trial counts down.</div>
+    </div>
+  </div>
+
+  <!-- Detail: What happens behind the scenes -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:24px;">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px;">⚙️ Behind the Scenes</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px;line-height:1.7;">
+      <div>
+        <strong>When admin generates a link:</strong><br>
+        • Creates a Hermes profile in `~/.hermes/profiles/invite-abc123/`<br>
+        • Stores link ID, trial expiry, and plan in the user database<br>
+        • Profile is inactive until first WhatsApp message
+      </div>
+      <div>
+        <strong>When user clicks the link:</strong><br>
+        • WhatsApp Business API receives the incoming message<br>
+        • Gateway checks: is this phone number known? → No<br>
+        • Gateway matches the invite link → activates the pre-created profile<br>
+        • Links the phone number to the profile permanently<br>
+        • Triggers the 2-message conversational onboarding
+      </div>
+      <div>
+        <strong>Model routing:</strong><br>
+        • Every message → try Primary model<br>
+        • If 429/503/timeout → auto-switch to Backup model<br>
+        • Admin can override per user (set a different primary)<br>
+        • No user-visible model selection at any point
+      </div>
+      <div>
+        <strong>Trial & billing:</strong><br>
+        • Trial start = first WhatsApp message<br>
+        • On expiry day: agent sends payment link<br>
+        • If "no expiry" link: user never pays (special users)<br>
+        • Admin can extend trial or convert to no-expiry from dashboard
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
