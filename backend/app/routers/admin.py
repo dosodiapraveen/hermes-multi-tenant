@@ -3,19 +3,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 import secrets
 import shutil, os
+from datetime import datetime
 from app.database import get_db
 from app.auth import require_admin
-from app.models.schemas import InviteLinkCreate
+from app.models.schemas import (
+    InviteLinkCreate,
+    UserModelOverride,
+    UserSkillCreate,
+    GlobalSkillTemplate,
+)
 from app.config import settings
 from app.services.profile_init import init_user_profile
+from app.services.agent_manager import (
+    profile_exists,
+    write_user_skill,
+    update_user_model_config,
+    write_global_skill_template,
+    hermes_profile_chat,
+    PROFILES_ROOT,
+)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
+
+# ═══════════════════════════════════════════
+# Dashboard
+# ═══════════════════════════════════════════
 
 @router.get("/dashboard")
 async def dashboard(db: AsyncSession = Depends(get_db)):
     r = await db.execute(text("SELECT (SELECT COUNT(*) FROM user_profiles WHERE is_active=true) as au, (SELECT COUNT(*) FROM user_profiles) as tu, (SELECT COALESCE(SUM((details->>'tokens')::int),0) FROM activity_logs WHERE action='message' AND created_at>NOW()-INTERVAL'1 day') as tt"))
     row = r.fetchone()
     return {"active_users":row[0] or 0,"total_users":row[1] or 0,"total_agents":row[1] or 0,"tokens_today":row[2] or 0}
+
+# ═══════════════════════════════════════════
+# User CRUD
+# ═══════════════════════════════════════════
 
 @router.post("/users")
 async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)):
@@ -96,6 +118,18 @@ async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
 
     return {"status": "deleted", "user_id": user_id}
 
+@router.get("/users")
+async def list_users(db: AsyncSession = Depends(get_db)):
+    r = await db.execute(text("SELECT id,phone_number,agent_name,plan,is_vip,trial_ends_at,primary_model,backup_model,is_active,profile_path,created_at FROM user_profiles ORDER BY created_at DESC LIMIT 100"))
+    return [{"id":str(row[0]),"phone_number":row[1],"agent_name":row[2],"plan":row[3],"is_vip":row[4],
+        "trial_ends_at":row[5].isoformat() if row[5] else None,
+        "primary_model":row[6],"backup_model":row[7],"is_active":row[8],
+        "profile_path":row[9],"created_at":row[10].isoformat()} for row in r.fetchall()]
+
+# ═══════════════════════════════════════════
+# Invite Links
+# ═══════════════════════════════════════════
+
 @router.post("/invite-links")
 async def create_invite(body: InviteLinkCreate, db: AsyncSession = Depends(get_db)):
     code = secrets.token_urlsafe(8)[:12]
@@ -109,6 +143,10 @@ async def list_invites(db: AsyncSession = Depends(get_db)):
     r = await db.execute(text("SELECT id,code,label,agent_name,plan,trial_days,is_vip,claimed_by,claimed_at,created_at FROM invite_links ORDER BY created_at DESC LIMIT 50"))
     return [{"id":str(row[0]),"code":row[1],"label":row[2],"agent_name":row[3],"plan":row[4],"trial_days":row[5],"is_vip":row[6],"claimed":row[7] is not None,"link_url":f"{settings.public_url}/join/{row[1]}","created_at":row[9].isoformat()} for row in r.fetchall()]
 
+# ═══════════════════════════════════════════
+# Global Model Config
+# ═══════════════════════════════════════════
+
 @router.get("/models")
 async def get_models():
     return {"primary_model":settings.default_primary_model,"backup_model":settings.default_backup_model}
@@ -121,10 +159,208 @@ async def update_models(body: dict, db: AsyncSession = Depends(get_db)):
         await db.execute(text("UPDATE user_profiles SET backup_model=:m,updated_at=NOW() WHERE model_overridden_at IS NULL"),{"m":body["backup_model"]})
     return {"status":"updated"}
 
-@router.get("/users")
-async def list_users(db: AsyncSession = Depends(get_db)):
-    r = await db.execute(text("SELECT id,phone_number,agent_name,plan,is_vip,trial_ends_at,primary_model,backup_model,is_active,profile_path,created_at FROM user_profiles ORDER BY created_at DESC LIMIT 100"))
-    return [{"id":str(row[0]),"phone_number":row[1],"agent_name":row[2],"plan":row[3],"is_vip":row[4],
-        "trial_ends_at":row[5].isoformat() if row[5] else None,
-        "primary_model":row[6],"backup_model":row[7],"is_active":row[8],
-        "profile_path":row[9],"created_at":row[10].isoformat()} for row in r.fetchall()]
+# ═══════════════════════════════════════════
+# Per-User Model Override
+# ═══════════════════════════════════════════
+# POST /api/admin/users/{user_id}/model
+
+@router.post("/users/{user_id}/model")
+async def override_user_model(user_id: str, body: UserModelOverride, db: AsyncSession = Depends(get_db)):
+    """Override the AI model for a specific user. This sets model_overridden_at
+    so that global model updates won't overwrite this user's choice."""
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+    user = r.fetchone()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    updates = []
+    params = {"uid": user_id, "now": datetime.utcnow()}
+
+    if body.primary_model:
+        updates.append("primary_model = :pm")
+        params["pm"] = body.primary_model
+    if body.backup_model:
+        updates.append("backup_model = :bm")
+        params["bm"] = body.backup_model
+
+    if not updates:
+        raise HTTPException(400, "At least one of primary_model or backup_model is required")
+
+    updates.append("model_overridden_at = :now")
+    updates.append("updated_at = :now")
+
+    await db.execute(
+        text(f"UPDATE user_profiles SET {', '.join(updates)} WHERE id=:uid"),
+        params,
+    )
+
+    # Also update the on-disk Hermes profile config.yaml
+    profile_path = user[1]
+    if profile_path:
+        try:
+            await update_user_model_config(
+                user_id=user_id,
+                primary_model=body.primary_model,
+                backup_model=body.backup_model,
+                profile_dir=profile_path,
+            )
+        except Exception as e:
+            logger.error("Failed to update config.yaml for user %s: %s", user_id, e)
+
+    # Log the override
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:uid, 'model_override', :det)"),
+        {"uid": user_id, "det": f'{{"primary":"{body.primary_model or ""}","backup":"{body.backup_model or ""}"}}'})
+
+    return {
+        "status": "updated",
+        "user_id": user_id,
+        "primary_model": body.primary_model,
+        "backup_model": body.backup_model,
+    }
+
+# ═══════════════════════════════════════════
+# Per-User Skills
+# ═══════════════════════════════════════════
+# POST /api/admin/users/{user_id}/skills
+
+@router.post("/users/{user_id}/skills")
+async def add_user_skill(user_id: str, body: UserSkillCreate, db: AsyncSession = Depends(get_db)):
+    """Add or update a skill file for a specific user's Hermes profile."""
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+    user = r.fetchone()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if not body.skill_name.endswith(".md"):
+        raise HTTPException(400, "Skill name must end with .md")
+
+    profile_path = user[1]
+    if not profile_path:
+        raise HTTPException(400, "User has no profile path set up")
+
+    try:
+        skill_path = await write_user_skill(
+            user_id=user_id,
+            skill_name=body.skill_name,
+            content=body.content,
+            profile_dir=profile_path,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Failed to write skill: {e}")
+
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:uid, 'skill_added', :det)"),
+        {"uid": user_id, "det": f'{{"skill":"{body.skill_name}","path":"{skill_path}"}}'})
+
+    return {
+        "status": "ok",
+        "user_id": user_id,
+        "skill_name": body.skill_name,
+        "path": skill_path,
+    }
+
+# ═══════════════════════════════════════════
+# Global Skills Template (push to all users)
+# ═══════════════════════════════════════════
+# POST /api/admin/skills
+
+@router.post("/skills")
+async def add_global_skill(body: GlobalSkillTemplate, db: AsyncSession = Depends(get_db)):
+    """Add or update a skill template and push it to all users (or a subset)."""
+    if not body.skill_name.endswith(".md"):
+        raise HTTPException(400, "Skill name must end with .md")
+
+    results = await write_global_skill_template(
+        skill_name=body.skill_name,
+        content=body.content,
+        user_ids=body.user_ids,
+    )
+
+    success_count = sum(1 for r in results if r["status"] == "ok")
+    failed_count = sum(1 for r in results if r["status"] == "failed")
+
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES ('system', 'global_skill', :det)"),
+        {"det": f'{{"skill":"{body.skill_name}","success":{success_count},"failed":{failed_count}}}'})
+
+    return {
+        "status": "ok",
+        "skill_name": body.skill_name,
+        "users_targeted": len(results),
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "results": results,
+    }
+
+# ═══════════════════════════════════════════
+# Agent Status & Restart
+# ═══════════════════════════════════════════
+
+@router.get("/users/{user_id}/status")
+async def agent_status(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Check if a user's Hermes agent profile is healthy."""
+    r = await db.execute(text("SELECT id, is_active, profile_path, primary_model, backup_model FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+    user = r.fetchone()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    profile_path = user[2]
+    config_exists = False
+    skills_count = 0
+    memories_count = 0
+
+    if profile_path and os.path.exists(profile_path):
+        config_exists = os.path.exists(os.path.join(profile_path, "config.yaml"))
+        skills_dir = os.path.join(profile_path, "skills")
+        memories_dir = os.path.join(profile_path, "memories")
+        if os.path.exists(skills_dir):
+            skills_count = len([f for f in os.listdir(skills_dir) if f.endswith(".md")])
+        if os.path.exists(memories_dir):
+            memories_count = len(os.listdir(memories_dir))
+
+    return {
+        "user_id": user_id,
+        "is_active": bool(user[1]),
+        "profile_exists": bool(profile_path) and os.path.exists(profile_path) if profile_path else False,
+        "config_exists": config_exists,
+        "skills_count": skills_count,
+        "memories_count": memories_count,
+        "primary_model": user[3],
+        "backup_model": user[4],
+        "profile_path": profile_path,
+    }
+
+@router.post("/users/{user_id}/restart")
+async def restart_agent(user_id: str, db: AsyncSession = Depends(get_db)):
+    """'Restart' the user's agent by sending a health-check query through Hermes.
+    The Hermes CLI is stateless per invocation (no persistent daemon), so this
+    simply verifies the agent can respond by running a ping-like query."""
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid"), {"uid": user_id})
+    user = r.fetchone()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    profile_path = user[1]
+    if not profile_path or not os.path.exists(profile_path):
+        raise HTTPException(400, "User profile directory does not exist")
+
+    try:
+        # Run a quick ping query to verify the agent is responsive
+        resp = await hermes_profile_chat(
+            user_id=user_id,
+            message="ping",
+            profile_dir=profile_path,
+            timeout=30,
+        )
+        status = "ok" if resp else "no_response"
+    except Exception as e:
+        status = f"failed: {str(e)[:200]}"
+
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:uid, 'agent_restart', :det)"),
+        {"uid": user_id, "det": f'{{"status":"{status}"}}'})
+
+    return {
+        "status": status,
+        "user_id": user_id,
+    }
+
+import logging
+logger = logging.getLogger(__name__)

@@ -21,3 +21,19 @@ class UserOverride(BaseModel):
     user_id: str
     primary_model: Optional[str] = None
     backup_model: Optional[str] = None
+
+class UserModelOverride(BaseModel):
+    """Override the model for a specific user."""
+    primary_model: Optional[str] = None
+    backup_model: Optional[str] = None
+
+class UserSkillCreate(BaseModel):
+    """Add or update a skill file for a user."""
+    skill_name: str = Field(..., min_length=1, max_length=200, description="Skill filename (e.g. 'custom-instructions.md')")
+    content: str = Field(..., min_length=1, description="Full markdown content of the skill")
+
+class GlobalSkillTemplate(BaseModel):
+    """Add or update a skill template pushed to all users."""
+    skill_name: str = Field(..., min_length=1, max_length=200, description="Skill filename (e.g. 'global-instructions.md')")
+    content: str = Field(..., min_length=1, description="Full markdown content of the skill")
+    user_ids: Optional[list[str]] = Field(None, description="Optional specific user IDs to target (default: all)")
