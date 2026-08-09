@@ -5,6 +5,9 @@ class Settings(BaseSettings):
     db_password: str = "change_me"
     database_url: str = ""
     supabase_jwt_secret: str = "dev-secret-change-in-production"
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    supabase_service_key: Optional[str] = None
     public_url: str = "http://localhost:8000"
     anthropic_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
