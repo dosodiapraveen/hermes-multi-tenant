@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
       POSTGRES_DB: hermes
       POSTGRES_USER: hermes
@@ -35,9 +35,6 @@ services:
       redis:
         condition: service_healthy
     env_file: .env
-    volumes:
-      - ./backend:/app
-      - ./hermes:/opt/hermes
 
 volumes:
   postgres_data:
