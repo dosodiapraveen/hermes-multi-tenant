@@ -22,7 +22,7 @@ async def health():
 
 @app.post("/api/auth/login")
 async def dev_login(body: dict):
-    if body.get("email") == "admin@hermes.io" and body.get("password") == "admin":
+    if body.get("email") == "admin@hermes.io" and body.get("password") == "rockthework":
         exp = datetime.utcnow() + timedelta(hours=8)
         token = jwt.encode({"sub":"dev-admin","role":"admin","email":body["email"],"exp":exp,"aud":"authenticated"}, settings.supabase_jwt_secret, algorithm="HS256")
         return {"access_token":token,"token_type":"bearer"}
