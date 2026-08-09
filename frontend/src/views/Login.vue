@@ -65,7 +65,7 @@ export default {
           throw new Error(data.detail || data.message || 'Login failed')
         }
         const data = await res.json()
-        localStorage.setItem('access_token', data.access_token)
+        localStorage.setItem('token', data.access_token)
         if (data.email) {
           localStorage.setItem('user_email', data.email)
         } else {

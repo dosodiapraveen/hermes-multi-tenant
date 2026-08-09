@@ -134,12 +134,12 @@ export default {
     async fetchInvites() {
       this.loading = true
       try {
-        const token = localStorage.getItem('access_token')
+        const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/invite-links', {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.status === 401) {
-          localStorage.removeItem('access_token')
+          localStorage.removeItem('token')
           this.$router.push('/login')
           return
         }
@@ -156,7 +156,7 @@ export default {
       this.creating = true
       this.formError = ''
       try {
-        const token = localStorage.getItem('access_token')
+        const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/invite-links', {
           method: 'POST',
           headers: {

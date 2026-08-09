@@ -60,12 +60,12 @@ export default {
     async fetchSettings() {
       this.loading = true
       try {
-        const token = localStorage.getItem('access_token')
+        const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/models', {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.status === 401) {
-          localStorage.removeItem('access_token')
+          localStorage.removeItem('token')
           this.$router.push('/login')
           return
         }
@@ -85,7 +85,7 @@ export default {
       this.saveError = ''
       this.saveSuccess = false
       try {
-        const token = localStorage.getItem('access_token')
+        const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/models', {
           method: 'POST',
           headers: {

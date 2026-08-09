@@ -57,12 +57,12 @@ export default {
     async fetchUsers() {
       this.loading = true
       try {
-        const token = localStorage.getItem('access_token')
+        const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/users', {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.status === 401) {
-          localStorage.removeItem('access_token')
+          localStorage.removeItem('token')
           this.$router.push('/login')
           return
         }
