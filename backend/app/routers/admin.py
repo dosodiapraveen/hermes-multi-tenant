@@ -70,7 +70,7 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
             plan=plan if not is_vip else "vip",
             is_vip=is_vip,
         )
-        await db.execute(text("UPDATE user_profiles SET profile_path=:pp WHERE id=:uid OR phone_number=:uid"),
+        await db.execute(text("UPDATE user_profiles SET profile_path=:pp WHERE id::text=:uid OR phone_number=:uid"),
             {"pp": profile["profile_dir"], "uid": uid})
         profile_status = "created"
         vault_path = profile["vault_dir"]
@@ -97,7 +97,7 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
     """Delete a user, their Hermes profile, Obsidian vault, and logs."""
-    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
     user = r.fetchone()
     if not user:
         raise HTTPException(404, "User not found")
@@ -114,7 +114,7 @@ async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
     # Delete from DB (cascade to activity_logs, invite_links)
     await db.execute(text("DELETE FROM activity_logs WHERE user_id=:uid"), {"uid": user_id})
     await db.execute(text("UPDATE invite_links SET claimed_by=NULL, claimed_at=NULL WHERE claimed_by=:uid"), {"uid": user_id})
-    await db.execute(text("DELETE FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    await db.execute(text("DELETE FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
 
     await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES ('system', 'user_deleted', :det)"),
         {"det": f'{{"deleted_user":"{user_id}"}}'})
@@ -171,7 +171,7 @@ async def update_models(body: dict, db: AsyncSession = Depends(get_db)):
 async def override_user_model(user_id: str, body: UserModelOverride, db: AsyncSession = Depends(get_db)):
     """Override the AI model for a specific user. This sets model_overridden_at
     so that global model updates won't overwrite this user's choice."""
-    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
     user = r.fetchone()
     if not user:
         raise HTTPException(404, "User not found")
@@ -193,7 +193,7 @@ async def override_user_model(user_id: str, body: UserModelOverride, db: AsyncSe
     updates.append("updated_at = :now")
 
     await db.execute(
-        text(f"UPDATE user_profiles SET {', '.join(updates)} WHERE id=:uid OR phone_number=:uid"),
+        text(f"UPDATE user_profiles SET {', '.join(updates)} WHERE id::text=:uid OR phone_number=:uid"),
         params,
     )
 
@@ -229,7 +229,7 @@ async def override_user_model(user_id: str, body: UserModelOverride, db: AsyncSe
 @router.post("/users/{user_id}/skills")
 async def add_user_skill(user_id: str, body: UserSkillCreate, db: AsyncSession = Depends(get_db)):
     """Add or update a skill file for a specific user's Hermes profile."""
-    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
     user = r.fetchone()
     if not user:
         raise HTTPException(404, "User not found")
@@ -300,7 +300,7 @@ async def add_global_skill(body: GlobalSkillTemplate, db: AsyncSession = Depends
 @router.get("/users/{user_id}/status")
 async def agent_status(user_id: str, db: AsyncSession = Depends(get_db)):
     """Check if a user's Hermes agent profile is healthy."""
-    r = await db.execute(text("SELECT id, is_active, profile_path, primary_model, backup_model FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    r = await db.execute(text("SELECT id, is_active, profile_path, primary_model, backup_model FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
     user = r.fetchone()
     if not user:
         raise HTTPException(404, "User not found")
@@ -336,7 +336,7 @@ async def restart_agent(user_id: str, db: AsyncSession = Depends(get_db)):
     """'Restart' the user's agent by sending a health-check query through Hermes.
     The Hermes CLI is stateless per invocation (no persistent daemon), so this
     simply verifies the agent can respond by running a ping-like query."""
-    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id=:uid OR phone_number=:uid"), {"uid": user_id})
+    r = await db.execute(text("SELECT id, profile_path FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
     user = r.fetchone()
     if not user:
         raise HTTPException(404, "User not found")
