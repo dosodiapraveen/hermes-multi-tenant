@@ -6,6 +6,7 @@ import Login from './views/Login.vue'
 import Dashboard from './views/Dashboard.vue'
 import Users from './views/Users.vue'
 import Invites from './views/Invites.vue'
+import Usage from './views/Usage.vue'
 import Settings from './views/Settings.vue'
 
 const routes = [
@@ -14,6 +15,7 @@ const routes = [
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { requiresAuth: true } },
   { path: '/users', name: 'Users', component: Users, meta: { requiresAuth: true } },
   { path: '/invites', name: 'Invites', component: Invites, meta: { requiresAuth: true } },
+  { path: '/usage', name: 'Usage', component: Usage, meta: { requiresAuth: true } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAuth: true } },
 ]
 

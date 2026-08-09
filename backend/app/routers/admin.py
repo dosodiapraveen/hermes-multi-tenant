@@ -130,6 +130,54 @@ async def list_users(db: AsyncSession = Depends(get_db)):
         "profile_path":row[9],"created_at":row[10].isoformat()} for row in r.fetchall()]
 
 # ═══════════════════════════════════════════
+# Usage Analytics
+# ═══════════════════════════════════════════
+
+@router.get("/usage")
+async def get_usage(db: AsyncSession = Depends(get_db)):
+    """Get usage stats: messages per day, per user, total tokens."""
+    # Messages per day (last 7 days)
+    r = await db.execute(text("""
+        SELECT DATE(created_at) as day, COUNT(*) as msgs,
+               COALESCE(SUM((details->>'tokens')::int), 0) as tokens
+        FROM activity_logs WHERE action='message'
+          AND created_at > NOW() - INTERVAL '7 days'
+        GROUP BY day ORDER BY day
+    """))
+    daily = [{"date": str(row[0]), "messages": row[1], "tokens": row[2]} for row in r.fetchall()]
+
+    # Per user stats
+    r = await db.execute(text("""
+        SELECT u.agent_name, u.phone_number,
+               COUNT(l.id) as msgs,
+               COALESCE(SUM((l.details->>'tokens')::int), 0) as tokens,
+               MAX(l.created_at) as last_active
+        FROM activity_logs l
+        JOIN user_profiles u ON u.id::text = l.user_id
+        WHERE l.action='message' AND l.created_at > NOW() - INTERVAL '30 days'
+        GROUP BY u.id, u.agent_name, u.phone_number
+        ORDER BY msgs DESC
+    """))
+    per_user = [{
+        "agent_name": row[0], "phone": row[1],
+        "messages": row[2], "tokens": row[3],
+        "last_active": row[4].isoformat() if row[4] else None
+    } for row in r.fetchall()]
+
+    # Totals
+    r = await db.execute(text("""
+        SELECT COUNT(*) as total, COALESCE(SUM((details->>'tokens')::int), 0) as total_tokens
+        FROM activity_logs WHERE action='message'
+    """))
+    totals = r.fetchone()
+
+    return {
+        "daily": daily,
+        "per_user": per_user,
+        "totals": {"messages": totals[0], "tokens": totals[1]},
+    }
+
+# ═══════════════════════════════════════════
 # Invite Links
 # ═══════════════════════════════════════════
 
