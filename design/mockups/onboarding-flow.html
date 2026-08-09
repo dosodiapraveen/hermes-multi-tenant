@@ -426,9 +426,15 @@ h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
         <div class="link-form">
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">User Name / Label</label>
+              <input class="form-input" placeholder="e.g. Dr. Ananya Sharma" value="Dr. Ananya Sharma">
+            </div>
+            <div class="form-group">
               <label class="form-label">Agent Name</label>
               <input class="form-input" placeholder="e.g. My Assistant" value="My Assistant">
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label">Trial Duration</label>
               <select class="form-select">
@@ -465,21 +471,30 @@ h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
           
           <div class="link-item">
             <span style="font-size:14px;">🔗</span>
-            <span class="link-url">hermes.io/join/abc123xyz</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Dr. Ananya Sharma</div>
+              <div class="link-url">hermes.io/join/abc123xyz</div>
+            </div>
             <span class="link-status active">● 7 days left</span>
             <button class="link-copy-btn">Copy</button>
           </div>
           
           <div class="link-item">
             <span style="font-size:14px;">🔗</span>
-            <span class="link-url">hermes.io/join/special-doc01</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Rahul Mehta — VC Partner</div>
+              <div class="link-url">hermes.io/join/rahul-vc</div>
+            </div>
             <span class="link-status claimed">● Claimed</span>
             <button class="link-copy-btn" style="opacity:0.5;">Copy</button>
           </div>
           
           <div class="link-item">
             <span style="font-size:14px;">🔗</span>
-            <span class="link-url">hermes.io/join/permanent-vip</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:600;color:var(--text-primary);">Neha Kapoor (VIP — Founder)</div>
+              <div class="link-url">hermes.io/join/permanent-vip</div>
+            </div>
             <span class="link-status active" style="background:rgba(253,203,110,0.15);color:#8B7300;">♾️ No expiry</span>
             <button class="link-copy-btn">Copy</button>
           </div>
