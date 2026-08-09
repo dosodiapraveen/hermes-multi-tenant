@@ -9,6 +9,8 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# ── WhatsApp ──
+
 @router.post("/whatsapp")
 async def whatsapp(request: Request, db: AsyncSession = Depends(get_db)):
     if "hub.challenge" in request.query_params:
@@ -39,6 +41,26 @@ async def whatsapp(request: Request, db: AsyncSession = Depends(get_db)):
 async def wa_verify(request: Request):
     if request.query_params.get("hub.verify_token") == settings.whatsapp_verify_token:
         return int(request.query_params.get("hub.challenge",0))
+
+# ── Telegram ──
+
+@router.post("/telegram")
+async def telegram(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.json()
+    chat_id = str(body.get("message",{}).get("chat",{}).get("id",""))
+    text_msg = body.get("message",{}).get("text","")
+    if not chat_id or not text_msg: return {"status":"ok"}
+    # Look up user by chat_id stored in phone_number field
+    r = await db.execute(text("SELECT id,is_active,primary_model,backup_model FROM user_profiles WHERE phone_number=:c"),{"c":chat_id})
+    u = r.fetchone()
+    if not u or not u[1]: return {"status":"ignored"}
+    resp = await _call_ai(u[2],u[3],text_msg)
+    async with httpx.AsyncClient() as c:
+        await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage", json={"chat_id":int(chat_id),"text":resp})
+    await db.execute(text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'message',:det)"),{"uid":str(u[0]),"det":'{"platform":"telegram","tokens":'+str(len(text_msg)//4)+'}'})
+    return {"status":"ok"}
+
+# ── AI ──
 
 async def _call_ai(primary:str,backup:str,msg:str)->str:
     try: return await _api(primary,msg)

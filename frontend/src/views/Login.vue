@@ -1,14 +1,39 @@
 <template>
-  <div class="login-wrap">
+  <div class="login-page">
     <div class="login-card">
-      <div class="icon">⚡</div>
-      <h1>Hermes Admin</h1>
-      <p class="sub">Sign in to manage your platform</p>
-      <form @submit.prevent="login">
-        <div class="field"><label>Email</label><input type="email" v-model="email" required></div>
-        <div class="field"><label>Password</label><input type="password" v-model="password" required></div>
-        <p v-if="error" class="error">{{ error }}</p>
-        <button type="submit" class="btn" :disabled="loading">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
+      <div class="login-header">
+        <div class="logo-icon">H</div>
+        <h1>Hermes Admin</h1>
+        <p>Sign in to manage your platform</p>
+      </div>
+      <form @submit.prevent="handleLogin" class="login-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            id="email"
+            v-model="email"
+            type="email"
+            placeholder="admin@example.com"
+            required
+            autocomplete="email"
+          />
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            id="password"
+            v-model="password"
+            type="password"
+            placeholder="Enter your password"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+        <div v-if="error" class="error-message">{{ error }}</div>
+        <button type="submit" class="login-btn" :disabled="loading">
+          <span v-if="loading" class="spinner"></span>
+          <span v-else>Sign In</span>
+        </button>
       </form>
     </div>
   </div>
@@ -16,35 +41,180 @@
 
 <script>
 export default {
-  data() { return { email:'admin@hermes.io', password:'', loading:false, error:'' }},
-  methods: {
-    async login() {
-      this.loading = true; this.error = ''
-      try {
-        const r = await fetch('/api/auth/login', { method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({ email:this.email, password:this.password })
-        })
-        const d = await r.json()
-        if (!r.ok) { this.error = d.detail || 'Login failed'; return }
-        localStorage.setItem('token', d.access_token)
-        localStorage.setItem('email', this.email)
-        this.$router.push('/dashboard')
-      } catch(e) { this.error = 'Network error' }
-      finally { this.loading = false }
+  name: 'LoginView',
+  data() {
+    return {
+      email: '',
+      password: '',
+      loading: false,
+      error: '',
     }
-  }
+  },
+  methods: {
+    async handleLogin() {
+      this.loading = true
+      this.error = ''
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: this.email, password: this.password }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail || data.message || 'Login failed')
+        }
+        const data = await res.json()
+        localStorage.setItem('access_token', data.access_token)
+        if (data.email) {
+          localStorage.setItem('user_email', data.email)
+        } else {
+          localStorage.setItem('user_email', this.email)
+        }
+        this.$router.push('/dashboard')
+      } catch (err) {
+        this.error = err.message
+      } finally {
+        this.loading = false
+      }
+    },
+  },
 }
 </script>
 
 <style scoped>
-.login-wrap { display:flex; align-items:center; justify-content:center; min-height:100vh; background:#1A1A2E; }
-.login-card { text-align:center; padding:40px; background:white; border-radius:16px; width:360px; }
-.icon { font-size:48px; margin-bottom:10px; }
-h1 { font-size:24px; font-weight:700; margin-bottom:4px; }
-.sub { margin-bottom:24px; }
-form { text-align:left; }
-.field { margin-bottom:14px; }
-.btn { width:100%; margin-top:4px; }
-.error { color:#E17055; font-size:13px; margin-bottom:8px; }
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-header .logo-icon {
+  width: 48px;
+  height: 48px;
+  background: #6C5CE7;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 22px;
+  color: #fff;
+  margin-bottom: 16px;
+}
+
+.login-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1A1A2E;
+  margin-bottom: 6px;
+}
+
+.login-header p {
+  font-size: 14px;
+  color: #636E70;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1A1A2E;
+}
+
+.form-group input {
+  padding: 12px 16px;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  color: #1A1A2E;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  border-color: #6C5CE7;
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #A0AEC0;
+}
+
+.error-message {
+  background: #FFF5F5;
+  color: #E53E3E;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.login-btn {
+  padding: 12px;
+  border: none;
+  background: #6C5CE7;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+}
+
+.login-btn:hover:not(:disabled) {
+  background: #5A4BD1;
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
 </style>
