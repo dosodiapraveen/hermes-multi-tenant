@@ -27,8 +27,7 @@ services:
   api:
     build: ./backend
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    expose: ["8000"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,6 +35,24 @@ services:
         condition: service_healthy
     env_file: .env
 
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    expose: ["80"]
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, frontend]
+
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
