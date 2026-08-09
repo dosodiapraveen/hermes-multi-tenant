@@ -112,10 +112,11 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
 async def hermes_profile_chat_with_fallback(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process message with automatic fallback to backup model."""
     try:
-        return await hermes_profile_chat(user_id, message, timeout)
+        return await hermes_profile_chat(user_id, message, timeout, profile_dir)
     except Exception as e:
         logger.warning(f"Primary model failed for {user_id}: {e}. Trying backup.")
-        cfg = get_user_config(user_id)
+        uid = profile_dir.split("/")[-1] if profile_dir else user_id
+        cfg = get_user_config(uid)
         backup_model = cfg.get("model", {}).get("backup", {}).get("model", "")
         if backup_model:
             try:
