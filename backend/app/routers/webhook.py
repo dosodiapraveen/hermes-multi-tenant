@@ -49,7 +49,6 @@ async def telegram(request: Request, db: AsyncSession = Depends(get_db)):
     body = await request.json()
     chat_id = str(body.get("message",{}).get("chat",{}).get("id",""))
     text_msg = body.get("message",{}).get("text","")
-    print(f"TELEGRAM_DEBUG: chat_id={chat_id} text={text_msg[:50]}", flush=True)
     if not chat_id or not text_msg: return {"status":"ok"}
     # Look up user by chat_id stored in phone_number field
     r = await db.execute(text("SELECT id,is_active,primary_model,backup_model FROM user_profiles WHERE phone_number=:c"),{"c":chat_id})
