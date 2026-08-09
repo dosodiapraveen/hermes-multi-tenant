@@ -58,7 +58,7 @@ def init_user_profile(user_id: str, agent_name: str = "My Assistant",
         ensure_dirs(vault_dir / folder)
     ensure_dirs(vault_dir / ".obsidian" / "plugins")
     with open(vault_dir / ".obsidian" / "app.json", "w") as f:
-        json.dump({"vault": {"name": f"{agent_name}\"'"'"'s Vault"}, "attachmentFolderPath": "Inbox", "newFileFolderPath": "Inbox", "newLinkFormat": "shortest", "useMarkdownLinks": True, "spellcheck": True}, f, indent=2)
+        json.dump({"vault": {"name": agent_name + "'s Vault"}, "attachmentFolderPath": "Inbox", "newFileFolderPath": "Inbox", "newLinkFormat": "shortest", "useMarkdownLinks": True, "spellcheck": True}, f, indent=2)
     with open(vault_dir / "Inbox" / "Welcome.md", "w") as f:
         f.write(f"# Welcome, {agent_name}!\n\nThis is your personal knowledge vault.\n")
 

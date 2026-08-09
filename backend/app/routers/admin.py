@@ -23,6 +23,9 @@ from app.services.agent_manager import (
     PROFILES_ROOT,
 )
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 # ═══════════════════════════════════════════
@@ -361,6 +364,3 @@ async def restart_agent(user_id: str, db: AsyncSession = Depends(get_db)):
         "status": status,
         "user_id": user_id,
     }
-
-import logging
-logger = logging.getLogger(__name__)
