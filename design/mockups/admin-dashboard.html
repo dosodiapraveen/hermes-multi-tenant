@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes — Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --purple: #6C5CE7;
+  --purple-dark: #5A4BD1;
+  --purple-light: #A29BFE;
+  --teal: #00CEC9;
+  --bg: #F0F2F5;
+  --surface: #FFFFFF;
+  --surface-alt: #F8F9FA;
+  --sidebar: #1A1A2E;
+  --sidebar-hover: #2D2D44;
+  --text-primary: #1A1A2E;
+  --text-secondary: #636E72;
+  --text-muted: #B2BEC3;
+  --border: #E2E6EA;
+  --success: #00B894;
+  --warning: #FDCB6E;
+  --error: #E17055;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+body {
+  font-family: 'Inter', -apple-system, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  display: flex;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 240px;
+  background: var(--sidebar);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-logo .logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--purple), var(--teal));
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: white;
+  font-weight: 800;
+}
+.sidebar-logo span { color: white; font-size: 18px; font-weight: 700; }
+.sidebar-badge { font-size: 10px; color: var(--teal); background: rgba(0,206,201,0.12); padding: 2px 8px; border-radius: 4px; margin-left: auto; }
+
+.sidebar-nav { flex: 1; padding: 12px 10px; }
+.nav-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.3); padding: 16px 10px 6px; font-weight: 600; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+  transition: all 0.15s;
+  text-decoration: none;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: var(--sidebar-hover); color: white; }
+.nav-item.active { background: rgba(108,92,231,0.2); color: white; font-weight: 500; }
+.nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.nav-item .nav-count {
+  margin-left: auto;
+  background: var(--error);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.sidebar-footer {
+  padding: 12px 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.admin-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.admin-info:hover { background: var(--sidebar-hover); }
+.admin-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+}
+.admin-name { font-size: 12px; color: white; font-weight: 500; }
+.admin-role { font-size: 10px; color: rgba(255,255,255,0.4); }
+
+/* ===== MAIN ===== */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+/* Top Bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.topbar h2 { font-size: 20px; font-weight: 700; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 36px;
+  width: 240px;
+  gap: 8px;
+}
+.search-box input {
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  flex: 1;
+  color: var(--text-primary);
+}
+.search-box input::placeholder { color: var(--text-muted); }
+.search-box .search-icon { font-size: 14px; color: var(--text-muted); }
+.topbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  position: relative;
+}
+.topbar-btn:hover { background: var(--border); }
+.topbar-btn .dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--error);
+}
+
+/* Content Area */
+.content {
+  padding: 24px 28px;
+}
+
+/* Stats Row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+}
+.stat-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.stat-card-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+.stat-card-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.stat-card-icon.purple { background: rgba(108,92,231,0.1); }
+.stat-card-icon.teal { background: rgba(0,206,201,0.1); }
+.stat-card-icon.green { background: rgba(0,184,148,0.1); }
+.stat-card-icon.amber { background: rgba(253,203,110,0.15); }
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; }
+.stat-change { font-size: 12px; color: var(--success); margin-top: 4px; font-weight: 500; }
+.stat-change.negative { color: var(--error); }
+
+/* Two Column Layout */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+/* Card Generic */
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title { font-size: 14px; font-weight: 600; }
+.panel-action { font-size: 12px; color: var(--purple); font-weight: 500; cursor: pointer; }
+.panel-action:hover { text-decoration: underline; }
+.panel-body { padding: 16px 20px; }
+
+/* Activity List */
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.activity-dot.purple { background: var(--purple); }
+.activity-dot.teal { background: var(--teal); }
+.activity-dot.amber { background: var(--warning); }
+.activity-dot.green { background: var(--success); }
+.activity-text { flex: 1; color: var(--text-primary); }
+.activity-text strong { font-weight: 600; }
+.activity-time { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* System Health */
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.health-item:last-child { border-bottom: none; }
+.health-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.health-status.green { background: var(--success); }
+.health-status.amber { background: var(--warning); }
+
+/* ===== USERS TABLE ===== */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); background: var(--surface-alt); }
+td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: rgba(108,92,231,0.02); }
+.user-cell { display: flex; align-items: center; gap: 8px; }
+.user-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: white; }
+.user-avatar.purple { background: var(--purple); }
+.user-avatar.teal { background: var(--teal); }
+.user-avatar.green { background: var(--success); }
+.user-info-name { font-weight: 600; font-size: 13px; }
+.user-info-email { font-size: 11px; color: var(--text-muted); }
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.status-badge.active { background: rgba(0,184,148,0.1); color: var(--success); }
+.status-badge.pending { background: rgba(253,203,110,0.15); color: #8B7300; }
+.status-badge.error { background: rgba(225,112,85,0.1); color: var(--error); }
+.plan-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg);
+}
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+.action-btn:hover { background: var(--bg); color: var(--text-primary); }
+
+/* Pagination */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px;
+}
+.page-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+}
+.page-btn:hover { border-color: var(--purple); color: var(--purple); }
+.page-btn.active { background: var(--purple); border-color: var(--purple); color: white; }
+
+/* ===== CONFIG CENTER ===== */
+.config-section { margin-bottom: 20px; }
+.config-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.config-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: center; }
+.config-field { flex: 1; }
+.config-select, .config-input {
+  width: 100%;
+  height: 40px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text-primary);
+  outline: none;
+}
+.config-select:focus, .config-input:focus { border-color: var(--purple); }
+.config-select { cursor: pointer; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.checkbox-item.checked { border-color: var(--purple); background: rgba(108,92,231,0.04); }
+.push-btn {
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--purple);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.push-btn:hover { background: var(--purple-dark); }
+.push-btn.secondary { background: var(--surface); color: var(--purple); border: 1px solid var(--purple); }
+.push-btn.secondary:hover { background: rgba(108,92,231,0.04); }
+
+/* ===== TABS ===== */
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tab {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  font-family: inherit;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+.tab:hover { color: var(--text-primary); }
+.tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+/* ===== VERSION CARD ===== */
+.version-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 12px;
+}
+.version-info { flex: 1; }
+.version-name { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.version-status { font-size: 12px; color: var(--text-secondary); }
+.version-status strong { color: var(--success); font-weight: 600; }
+.version-action { display: flex; gap: 8px; align-items: center; }
+
+/* ===== HIDDEN SCREENS ===== */
+.admin-screen { display: none; }
+.admin-screen.active { display: block; }
+
+/* ===== ONBOARDING FLOW ===== */
+.onboarding-flow {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.flow-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.flow-step-indicators { display: flex; gap: 8px; flex: 1; }
+.flow-step-dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.flow-step-dot.completed { background: var(--teal); }
+.flow-step-dot.active { background: var(--purple); }
+
+.flow-content { display: flex; gap: 40px; align-items: flex-start; }
+.flow-preview {
+  width: 260px;
+  flex-shrink: 0;
+}
+.phone-mini {
+  width: 260px;
+  height: 520px;
+  background: var(--surface);
+  border-radius: 28px;
+  border: 3px solid #1A1A2E;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+.phone-mini-notch {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 20px;
+  background: #1A1A2E;
+  border-radius: 0 0 10px 10px;
+  z-index: 10;
+}
+.phone-mini-screen {
+  padding: 28px 16px 16px;
+  height: 100%;
+  font-size: 11px;
+}
+.flow-details { flex: 1; }
+.flow-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; }
+.flow-field { margin-bottom: 14px; }
+.flow-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary); }
+
+/* Onboarding mini phone screen content */
+.ob-welcome { text-align: center; padding-top: 40px; }
+.ob-welcome .welcome-icon { font-size: 32px; margin-bottom: 8px; }
+.ob-welcome h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.ob-welcome p { font-size: 11px; color: var(--text-secondary); }
+.ob-form { padding-top: 20px; }
+.ob-form .field { margin-bottom: 10px; }
+.ob-form .field label { font-size: 10px; font-weight: 600; display: block; margin-bottom: 3px; }
+.ob-form .field input {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.ob-plan { padding-top: 16px; }
+.ob-plan-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 6px; cursor: pointer; font-size: 10px; }
+.ob-plan-card.popular { border-color: var(--purple); }
+.ob-plan-card .price { font-size: 14px; font-weight: 700; }
+.ob-plan-card .price span { font-size: 10px; font-weight: 400; color: var(--text-muted); }
+
+@media (max-width: 1000px) {
+  .sidebar { display: none; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .two-col { grid-template-columns: 1fr; }
+  .flow-content { flex-direction: column; }
+  .flow-preview { width: 100%; }
+  .phone-mini { margin: 0 auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <div class="logo-icon">H</div>
+      <span>Hermes</span>
+      <span class="sidebar-badge">Admin</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">Main</div>
+    <a class="nav-item active" onclick="showAdmin('dashboard')"><span class="nav-icon">📊</span> Dashboard</a>
+    <a class="nav-item" onclick="showAdmin('users')"><span class="nav-icon">👥</span> Users</a>
+    <a class="nav-item" onclick="showAdmin('onboarding')"><span class="nav-icon">✨</span> Onboarding</a>
+    
+    <div class="nav-section">Configuration</div>
+    <a class="nav-item" onclick="showAdmin('config')"><span class="nav-icon">⚙️</span> Config Center</a>
+    <a class="nav-item" onclick="showAdmin('skills')"><span class="nav-icon">🔌</span> Skills</a>
+    
+    <div class="nav-section">System</div>
+    <a class="nav-item" onclick="showAdmin('upgrades')"><span class="nav-icon">🔄</span> Upgrades</a>
+    <a class="nav-item" onclick="showAdmin('logs')"><span class="nav-icon">📋</span> Logs <span class="nav-count">3</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="admin-info">
+      <div class="admin-avatar">P</div>
+      <div>
+        <div class="admin-name">Prav K</div>
+        <div class="admin-role">Administrator</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <h2 id="page-title">Dashboard</h2>
+    </div>
+    <div class="topbar-right">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search users, configs...">
+      </div>
+      <button class="topbar-btn">🔔<span class="dot"></span></button>
+      <button class="topbar-btn">⚡</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== SCREEN: DASHBOARD ===== -->
+    <div class="admin-screen active" id="screen-dashboard">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Active Users</span>
+            <span class="stat-card-icon purple">👥</span>
+          </div>
+          <div class="stat-value">24</div>
+          <div class="stat-change">▲ 12% this week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Total Agents</span>
+            <span class="stat-card-icon teal">🤖</span>
+          </div>
+          <div class="stat-value">31</div>
+          <div class="stat-change">▲ 3 new this week</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Tokens Used (Today)</span>
+            <span class="stat-card-icon amber">⚡</span>
+          </div>
+          <div class="stat-value">185K</div>
+          <div class="stat-change negative">▲ 8% from yesterday</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Monthly Revenue</span>
+            <span class="stat-card-icon green">💰</span>
+          </div>
+          <div class="stat-value">$412</div>
+          <div class="stat-change">▲ 22% vs last month</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <!-- Recent Activity -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Recent Activity</span>
+            <span class="panel-action">View all</span>
+          </div>
+          <div class="panel-body">
+            <div class="activity-item">
+              <span class="activity-dot purple"></span>
+              <span class="activity-text"><strong>Alpha</strong> changed model to Claude Sonnet 4</span>
+              <span class="activity-time">2m ago</span>
+            </div>
+            <div class="activity-item">
+              <span class="activity-dot teal"></span>
+              <span class="activity-text"><strong>Beta</strong> connected WhatsApp</span>
+              <span class="activity-time">15m ago</span>
+            </div>
+            <div class="activity-item">
+              <span class="activity-dot green"></span>
+              <span class="activity-text"><strong>Gamma</strong> signed up</span>
+              <span class="activity-time">1h ago</span>
+            </div>
+            <div class="activity-item">
+              <span class="activity-dot amber"></span>
+              <span class="activity-text"><strong>Delta</strong> hit 90% token limit</span>
+              <span class="activity-time">2h ago</span>
+            </div>
+            <div class="activity-item">
+              <span class="activity-dot purple"></span>
+              <span class="activity-text"><strong>Admin</strong> pushed config update to all profiles</span>
+              <span class="activity-time">4h ago</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">System Health</span>
+            <span class="panel-action">Details</span>
+          </div>
+          <div class="panel-body">
+            <div class="health-item">
+              <span class="health-status green"></span>
+              <span style="flex:1;font-weight:500;">Hermes Agent</span>
+              <span style="font-size:12px;color:var(--text-secondary);">v0.8.3</span>
+            </div>
+            <div class="health-item">
+              <span class="health-status green"></span>
+              <span style="flex:1;font-weight:500;">Gateway</span>
+              <span style="font-size:12px;color:var(--text-secondary);">v0.8.3 • 12d uptime</span>
+            </div>
+            <div class="health-item">
+              <span class="health-status green"></span>
+              <span style="flex:1;font-weight:500;">Database</span>
+              <span style="font-size:12px;color:var(--text-secondary);">SQLite • 2.4 MB</span>
+            </div>
+            <div class="health-item">
+              <span class="health-status green"></span>
+              <span style="flex:1;font-weight:500;">API Pool (Anthropic)</span>
+              <span style="font-size:12px;color:var(--text-secondary);">1.2M tokens remaining</span>
+            </div>
+            <div class="health-item">
+              <span class="health-status amber"></span>
+              <span style="flex:1;font-weight:500;">VM Resources</span>
+              <span style="font-size:12px;color:var(--text-secondary);">CPU 34% • RAM 62% • Disk 41%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: USERS ===== -->
+    <div class="admin-screen" id="screen-users">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:14px;color:var(--text-secondary);">24 total users. 18 active this week.</span>
+        <button class="push-btn">+ New User</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>User</th><th>Agent</th><th>Plan</th><th>Model</th><th>Status</th><th>Tokens</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr><td><div class="user-cell"><div class="user-avatar purple">A</div><div><div class="user-info-name">Alpha</div><div class="user-info-email">alpha@email.com</div></div></div></td><td>My Bot</td><td><span class="plan-badge">Pro $15</span></td><td>Claude 4</td><td><span class="status-badge active">● Active</span></td><td>82K</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td><div class="user-cell"><div class="user-avatar teal">B</div><div><div class="user-info-name">Beta</div><div class="user-info-email">beta@email.com</div></div></div></td><td>Helper</td><td><span class="plan-badge">Basic $5</span></td><td>GPT-5</td><td><span class="status-badge active">● Active</span></td><td>45K</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td><div class="user-cell"><div class="user-avatar green">G</div><div><div class="user-info-name">Gamma</div><div class="user-info-email">gamma@email.com</div></div></div></td><td>—</td><td><span class="plan-badge">Trial</span></td><td>—</td><td><span class="status-badge pending">● Setup</span></td><td>0</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td><div class="user-cell"><div class="user-avatar purple">D</div><div><div class="user-info-name">Delta</div><div class="user-info-email">delta@email.com</div></div></div></td><td>Assis</td><td><span class="plan-badge">Pro $15</span></td><td>DeepSeek</td><td><span class="status-badge error">● Error</span></td><td>120K</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td><div class="user-cell"><div class="user-avatar teal">E</div><div><div class="user-info-name">Epsilon</div><div class="user-info-email">eps@email.com</div></div></div></td><td>Aria</td><td><span class="plan-badge">Business $35</span></td><td>Claude 4</td><td><span class="status-badge active">● Active</span></td><td>210K</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td><div class="user-cell"><div class="user-avatar purple">Z</div><div><div class="user-info-name">Zeta</div><div class="user-info-email">zeta@email.com</div></div></div></td><td>Zen</td><td><span class="plan-badge">Basic $5</span></td><td>GPT-5</td><td><span class="status-badge active">● Active</span></td><td>12K</td><td><button class="action-btn">⋯</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <button class="page-btn">‹</button>
+          <button class="page-btn active">1</button>
+          <button class="page-btn">2</button>
+          <button class="page-btn">3</button>
+          <button class="page-btn">4</button>
+          <button class="page-btn">›</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: ONBOARDING ===== -->
+    <div class="admin-screen" id="screen-onboarding">
+      <div style="margin-bottom:16px;">
+        <span style="font-size:14px;color:var(--text-secondary);">Configure the new user setup experience. Changes apply to all new signups.</span>
+      </div>
+      
+      <div class="onboarding-flow">
+        <div class="flow-header">
+          <div class="flow-step-indicators">
+            <div class="flow-step-dot completed"></div>
+            <div class="flow-step-dot completed"></div>
+            <div class="flow-step-dot active"></div>
+            <div class="flow-step-dot"></div>
+          </div>
+          <span style="font-size:12px;color:var(--text-secondary);">Step 3 of 4</span>
+        </div>
+        
+        <div class="flow-content">
+          <div class="flow-preview">
+            <div class="phone-mini">
+              <div class="phone-mini-notch"></div>
+              <div class="phone-mini-screen">
+                <div class="ob-plan">
+                  <div style="font-size:12px;font-weight:600;margin-bottom:8px;">Choose your plan</div>
+                  <div class="ob-plan-card popular">
+                    <div style="display:flex;justify-content:space-between;">
+                      <span style="font-weight:600;">Pro</span>
+                      <span class="price">$15 <span>/mo</span></span>
+                    </div>
+                    <div style="color:var(--text-secondary);margin-top:4px;">500K tokens • WhatsApp + Telegram • All skills</div>
+                  </div>
+                  <div class="ob-plan-card">
+                    <div style="display:flex;justify-content:space-between;">
+                      <span style="font-weight:600;">Basic</span>
+                      <span class="price">$5 <span>/mo</span></span>
+                    </div>
+                    <div style="color:var(--text-secondary);margin-top:4px;">100K tokens • Telegram only</div>
+                  </div>
+                  <div class="ob-plan-card">
+                    <div style="display:flex;justify-content:space-between;">
+                      <span style="font-weight:600;">Business</span>
+                      <span class="price">$35 <span>/mo</span></span>
+                    </div>
+                    <div style="color:var(--text-secondary);margin-top:4px;">2M tokens • All platforms • Custom models</div>
+                  </div>
+                  <div style="display:flex;gap:6px;margin-top:12px;">
+                    <div style="flex:1;height:34px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;">Back</div>
+                    <div style="flex:1;height:34px;border-radius:8px;background:var(--purple);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;">Continue</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-details">
+            <div class="flow-title">Step 3: Plan Selection</div>
+            <div class="flow-desc">User picks their subscription plan. You configure which plans are available and their pricing.</div>
+            
+            <div class="config-row" style="flex-wrap:wrap;">
+              <div class="config-field" style="flex:0 0 48%;">
+                <div class="config-label">Default Plan</div>
+                <select class="config-select">
+                  <option selected>Pro ($15/mo)</option>
+                  <option>Basic ($5/mo)</option>
+                  <option>Business ($35/mo)</option>
+                </select>
+              </div>
+              <div class="config-field" style="flex:0 0 48%;">
+                <div class="config-label">Free Trial Days</div>
+                <select class="config-select">
+                  <option>No trial</option>
+                  <option selected>7 days</option>
+                  <option>14 days</option>
+                  <option>30 days</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flow-field" style="margin-top:16px;">
+              <label>Available Plans</label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <label class="checkbox-item checked">☑ Basic $5</label>
+                <label class="checkbox-item checked">☑ Pro $15</label>
+                <label class="checkbox-item checked">☑ Business $35</label>
+                <label class="checkbox-item">☐ Enterprise (custom)</label>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:20px;">
+              <button class="push-btn secondary">← Previous: Model Selection</button>
+              <button class="push-btn">Next: Platform Connection →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: CONFIG CENTER ===== -->
+    <div class="admin-screen" id="screen-config">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:14px;color:var(--text-secondary);">Global settings applied to all profiles. Per-user overrides take precedence.</span>
+        <div style="display:flex;gap:8px;">
+          <button class="push-btn secondary">Preview Diff</button>
+          <button class="push-btn">⚡ Push to All</button>
+        </div>
+      </div>
+      
+      <div class="tabs">
+        <button class="tab active" onclick="configTab('models', this)">Models & Providers</button>
+        <button class="tab" onclick="configTab('features', this)">Features</button>
+        <button class="tab" onclick="configTab('limits', this)">Limits & Defaults</button>
+        <button class="tab" onclick="configTab('overrides', this)">Per-User Overrides</button>
+      </div>
+
+      <!-- Models tab -->
+      <div class="config-tab" id="config-models">
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Default Model</span></div>
+            <div class="panel-body">
+              <div class="config-section">
+                <div class="config-label">Provider</div>
+                <div class="config-row">
+                  <div class="config-field">
+                    <select class="config-select">
+                      <option selected>Anthropic</option>
+                      <option>OpenAI</option>
+                      <option>Fireworks (DeepSeek)</option>
+                      <option>Google Gemini</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="config-label" style="margin-top:12px;">Model</div>
+                <div class="config-row">
+                  <div class="config-field">
+                    <select class="config-select">
+                      <option>gpt-5</option>
+                      <option selected>claude-sonnet-4-2026</option>
+                      <option>claude-opus-4-2026</option>
+                      <option>accounts/fireworks/models/deepseek-v4</option>
+                      <option>gemini-2.5-pro</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><span class="panel-title">Available Models (User-facing)</span></div>
+            <div class="panel-body">
+              <div class="config-section">
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <label class="checkbox-item checked">☑ Claude Sonnet 4 (Recommended)</label>
+                  <label class="checkbox-item checked">☑ GPT-5 (Fast)</label>
+                  <label class="checkbox-item checked">☑ DeepSeek V4 (Budget)</label>
+                  <label class="checkbox-item">☐ Gemini 2.5 Pro</label>
+                  <label class="checkbox-item">☐ Claude Opus 4 (Premium)</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features tab (hidden by default) -->
+      <div class="config-tab" id="config-features" style="display:none;">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Feature Toggles</span></div>
+          <div class="panel-body">
+            <div class="config-row" style="flex-wrap:wrap;gap:16px;">
+              <label class="checkbox-item checked">☑ Voice Input (STT)</label>
+              <label class="checkbox-item checked">☑ Voice Output (TTS)</label>
+              <label class="checkbox-item checked">☑ Web Search</label>
+              <label class="checkbox-item checked">☑ Voice Notes → Vault</label>
+              <label class="checkbox-item">☐ Image Generation</label>
+              <label class="checkbox-item">☐ Blog Scanner</label>
+              <label class="checkbox-item">☐ Calendar Integration</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Limits tab -->
+      <div class="config-tab" id="config-limits" style="display:none;">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Rate Limits & Defaults</span></div>
+          <div class="panel-body">
+            <div class="two-col">
+              <div>
+                <div class="config-label">Messages per minute per user</div>
+                <input class="config-input" value="30" style="margin-bottom:12px;">
+                <div class="config-label">Max token context length</div>
+                <input class="config-input" value="128000" style="margin-bottom:12px;">
+              </div>
+              <div>
+                <div class="config-label">Temperature (default)</div>
+                <input class="config-input" value="0.7" style="margin-bottom:12px;">
+                <div class="config-label">Max response tokens</div>
+                <input class="config-input" value="4096" style="margin-bottom:12px;">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overrides tab -->
+      <div class="config-tab" id="config-overrides" style="display:none;">
+        <div class="panel">
+          <div class="panel-header"><span class="panel-title">Per-User Overrides</span></div>
+          <div class="panel-body">
+            <table>
+              <thead><tr><th>User</th><th>Override</th><th>Value</th><th>Set</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><strong>Alpha</strong></td><td>model</td><td>claude-sonnet-4</td><td>Aug 7</td><td><button class="action-btn">✕</button></td></tr>
+                <tr><td><strong>Beta</strong></td><td>stt.enabled</td><td>false</td><td>Aug 5</td><td><button class="action-btn">✕</button></td></tr>
+                <tr><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:12px;padding:24px;">No more overrides</td></tr>
+              </tbody>
+            </table>
+            <div style="margin-top:12px;">
+              <button class="push-btn secondary">+ Add Override</button>
+              <button class="push-btn secondary" style="margin-left:8px;">Clear All Overrides</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: SKILLS ===== -->
+    <div class="admin-screen" id="screen-skills">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:14px;color:var(--text-secondary);">11 global skills installed. Push updates to all profiles.</span>
+        <button class="push-btn">+ Install from Library</button>
+      </div>
+      <div class="panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Skill</th><th>Version</th><th>Status</th><th>Users</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>🌐 Web Search</td><td>v1.2</td><td><span class="status-badge active">● Active</span></td><td>22</td><td>Aug 5</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td>🎤 Voice Notes</td><td>v1.0</td><td><span class="status-badge active">● Active</span></td><td>18</td><td>Jul 28</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td>📰 Blog Scanner</td><td>v2.0</td><td><span class="status-badge active">● Active</span></td><td>7</td><td>Jul 20</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td>🎨 Image Gen</td><td>v0.5</td><td><span class="status-badge pending">● Beta</span></td><td>4</td><td>Aug 1</td><td><button class="action-btn">⋯</button></td></tr>
+              <tr><td>📊 Market Data</td><td>v1.0</td><td><span class="status-badge active">● Active</span></td><td>3</td><td>Jul 15</td><td><button class="action-btn">⋯</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: UPGRADES ===== -->
+    <div class="admin-screen" id="screen-upgrades">
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Hermes Agent</span>
+            <span class="stat-card-icon purple">🔄</span>
+          </div>
+          <div class="stat-value" style="font-size:22px;">v0.8.3</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Latest: v0.8.4</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Gateway</span>
+            <span class="stat-card-icon teal">🔄</span>
+          </div>
+          <div class="stat-value" style="font-size:22px;">v0.8.3</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Latest: v0.8.4</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Profiles</span>
+            <span class="stat-card-icon green">✅</span>
+          </div>
+          <div class="stat-value" style="font-size:22px;">24/24</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">All on v0.8.3</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header">
+            <span class="stat-card-label">Last Upgrade</span>
+            <span class="stat-card-icon amber">📅</span>
+          </div>
+          <div class="stat-value" style="font-size:22px;">12d</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Jul 26, 2026</div>
+        </div>
+      </div>
+
+      <div class="version-card">
+        <div class="version-info">
+          <div class="version-name">Hermes Agent v0.8.4 🔄 Update Available</div>
+          <div class="version-status">Changelog: New tools, improved memory compression, gateway crash fix for long messages</div>
+        </div>
+        <div class="version-action">
+          <button class="push-btn secondary" style="font-size:12px;">Test on 1 User</button>
+          <button class="push-btn" style="font-size:12px;">Upgrade All</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Rollout Strategy</span></div>
+        <div class="panel-body">
+          <div style="display:flex;gap:16px;">
+            <label class="checkbox-item checked" style="flex:1;padding:12px;flex-direction:column;gap:4px;border-radius:var(--radius-md);">
+              <div style="font-weight:600;font-size:14px;">⏩ Direct</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Upgrade all profiles at once. ~30s downtime.</div>
+            </label>
+            <label class="checkbox-item" style="flex:1;padding:12px;flex-direction:column;gap:4px;border-radius:var(--radius-md);">
+              <div style="font-weight:600;font-size:14px;">🧪 Canary</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Test on 1 user first, then roll to all.</div>
+            </label>
+            <label class="checkbox-item" style="flex:1;padding:12px;flex-direction:column;gap:4px;border-radius:var(--radius-md);">
+              <div style="font-weight:600;font-size:14px;">🔄 Blue-Green</div>
+              <div style="font-size:11px;color:var(--text-secondary);">New VM, copy profiles, swap traffic.</div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCREEN: LOGS ===== -->
+    <div class="admin-screen" id="screen-logs">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;gap:8px;">
+          <select class="config-select" style="width:160px;">
+            <option>All Users</option>
+            <option>Alpha</option>
+            <option>Beta</option>
+            <option>Delta (errors)</option>
+          </select>
+          <select class="config-select" style="width:140px;">
+            <option>All Levels</option>
+            <option>Error</option>
+            <option selected>Warning</option>
+            <option>Info</option>
+          </select>
+        </div>
+        <button class="push-btn secondary">Clear Filters</button>
+      </div>
+      <div class="panel">
+        <div class="panel-body" style="font-family:monospace;font-size:12px;line-height:1.8;padding:16px;background:#F8F9FA;">
+          <div style="color:var(--error);">[2026-08-07 14:23:12] ERROR Delta: API rate limit exceeded. Retrying in 30s.</div>
+          <div style="color:var(--warning);">[2026-08-07 14:10:05] WARN Alpha: Token usage at 90% of plan limit (450K/500K)</div>
+          <div style="color:var(--text-secondary);">[2026-08-07 13:55:00] INFO Beta: WhatsApp connected successfully</div>
+          <div style="color:var(--error);">[2026-08-07 13:22:44] ERROR Delta: Gateway timeout on message processing (12s)</div>
+          <div style="color:var(--success);">[2026-08-07 12:00:01] INFO Admin: Config push applied to 22 profiles. 2 overridden.</div>
+          <div style="color:var(--text-secondary);">[2026-08-07 11:30:18] INFO Gamma: Account created. Setup pending.</div>
+          <div style="color:var(--text-secondary);">[2026-08-07 10:15:33] INFO Alpha: Changed model to claude-sonnet-4</div>
+          <div style="color:var(--success);">[2026-08-07 09:00:00] INFO System: Daily scan completed. 0 issues.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showAdmin(screen) {
+  document.querySelectorAll('.admin-screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + screen).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event?.currentTarget?.classList.add('active');
+  
+  const titles = { dashboard: 'Dashboard', users: 'Users', onboarding: 'Onboarding Flow', config: 'Config Center', skills: 'Skills Library', upgrades: 'System Upgrades', logs: 'System Logs' };
+  document.getElementById('page-title').textContent = titles[screen] || screen;
+}
+
+function configTab(tab, el) {
+  document.querySelectorAll('.config-tab').forEach(t => t.style.display = 'none');
+  document.getElementById('config-' + tab).style.display = 'block';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+
+</body>
+</html>
