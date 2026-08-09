@@ -79,15 +79,16 @@ def write_vault_note(user_id: str, title: str, content: str):
     path.write_text(f"# {title}\n\n{content}\n\n---\nSaved by Hermes on {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
 
 
-async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60) -> str:
+async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
-    cfg = get_user_config(user_id)
+    uid = profile_dir.split("/")[-1] if profile_dir else user_id
+    cfg = get_user_config(uid)
     api_key = os.environ.get("FIREWORKS_API_KEY", "")
     model = cfg.get("model", {}).get("model", "accounts/fireworks/models/deepseek-v4-flash-0731")
 
     # Build system prompt with user context
-    memories = load_memories(user_id)
-    vault = read_vault(user_id)
+    memories = load_memories(uid)
+    vault = read_vault(uid)
     agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
     tools_enabled = cfg.get("tools", {})
     max_msgs = cfg.get("messaging", {}).get("max_daily_messages", 0)
@@ -104,11 +105,11 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60) -> 
     messages.append({"role": "user", "content": message})
 
     resp = await call_ai(model, messages, api_key, timeout)
-    save_memory(user_id, message, resp)
+    save_memory(uid, message, resp)
     return resp
 
 
-async def hermes_profile_chat_with_fallback(user_id: str, message: str, timeout: int = 60) -> str:
+async def hermes_profile_chat_with_fallback(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process message with automatic fallback to backup model."""
     try:
         return await hermes_profile_chat(user_id, message, timeout)

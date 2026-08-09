@@ -34,6 +34,7 @@ async def whatsapp(request: Request, db: AsyncSession = Depends(get_db)):
         resp = await hermes_profile_chat_with_fallback(
             user_id=str(u[0]),
             message=text_msg,
+            profile_dir=str(u[4]) if u[4] else None,
         )
         await _send_wa(phone,resp)
         await db.execute(text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'message',:det)"),{"uid":str(u[0]),"det":'{"tokens":'+str(len(text_msg)//4)+'}'})
@@ -63,6 +64,7 @@ async def telegram(request: Request, db: AsyncSession = Depends(get_db)):
     resp = await hermes_profile_chat_with_fallback(
         user_id=str(u[0]),
         message=text_msg,
+        profile_dir=str(u[2]) if u[2] else None,
     )
     async with httpx.AsyncClient() as c:
         await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage", json={"chat_id":int(chat_id),"text":resp})
