@@ -7,12 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: webfactory/ssh-agent@v0.9
+      - uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-      - name: Add server to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H 167.233.158.68 >> ~/.ssh/known_hosts
-      - name: Deploy
-        run: ssh root@167.233.158.68 "cd /opt/hermes-multi-tenant && git fetch origin && git reset --hard origin/main && docker compose up -d --build"
+      - run: ssh-keyscan 167.233.158.68 >> ~/.ssh/known_hosts
+      - run: ssh root@167.233.158.68 "cd /opt/hermes-multi-tenant && git fetch origin && git reset --hard origin/main && docker compose up -d --build"
