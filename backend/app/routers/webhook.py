@@ -61,6 +61,11 @@ async def telegram(request: Request):
 
         if not u[1]: return {"status":"ignored"}
 
+        # Show typing indicator while processing
+        async with httpx.AsyncClient() as c:
+            await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendChatAction",
+                json={"chat_id":int(chat_id), "action":"typing"})
+
         # Route through Hermes agent
         resp = await hermes_profile_chat_with_fallback(
             user_id=str(u[0]),
