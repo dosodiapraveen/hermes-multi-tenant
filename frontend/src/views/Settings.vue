@@ -62,7 +62,7 @@ export default {
       try {
         const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/models', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: 'Bearer ' + token },
         })
         if (res.status === 401) {
           localStorage.removeItem('token')
@@ -90,7 +90,7 @@ export default {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            Authorization: 'Bearer ' + token,
           },
           body: JSON.stringify({
             primary_model: this.primaryModel,
