@@ -10,3 +10,5 @@ slowapi==0.1.9
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.9
 pyyaml==6.0.2
+beautifulsoup4==4.15.0
+requests==2.34.2

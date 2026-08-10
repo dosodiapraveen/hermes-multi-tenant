@@ -119,47 +119,35 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> str:
-    """Search the web by scraping Google search results."""
+    """Search the web using Google (scraped via requests + BeautifulSoup)."""
+    import asyncio
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as c:
-            c.headers.update({"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
-            r = await c.get("https://www.google.com/search", params={"q": query, "num": num_results})
-            r.raise_for_status()
-        # Parse results
-        import re
-        results = []
-        for match in re.finditer(r'<a[^>]*href="/url\?q=([^"&]+)[^"]*"[^>]*>(.*?)</a>', r.text, re.DOTALL):
-            url = match.group(1)
-            title = re.sub(r'<[^>]+>', '', match.group(2)).strip()
-            if title and url and not url.startswith("http"):
-                continue
-            if title and url:
-                results.append(f"- {title}\n  {url}")
-        if not results:
-            # Fallback: extract plain text titles
-            for match in re.finditer(r'<h3[^>]*>(.*?)</h3>', r.text, re.DOTALL):
-                title = re.sub(r'<[^>]+>', '', match.group(1)).strip()
-                if title and len(title) > 5:
-                    results.append(f"- {title}")
-        if not results:
-            return "No results found. Try a different search."
-        return "\n\n".join(results[:num_results])
+        from bs4 import BeautifulSoup
+        import requests
+        def _search():
+            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            r = requests.get("https://www.google.com/search", params={"q": query, "num": num_results}, headers=headers, timeout=10)
+            soup = BeautifulSoup(r.text, "html.parser")
+            results = []
+            # Google result links are in <a> tags with href starting with /url?q=
+            for a in soup.find_all("a", href=True):
+                href = a["href"]
+                if href.startswith("/url?q="):
+                    import urllib.parse
+                    url = urllib.parse.parse_qs(href.split("?", 1)[1]).get("q", [None])[0]
+                    text = a.get_text(strip=True)
+                    if url and text and len(text) > 5 and len(results) < num_results:
+                        results.append(f"- {text}\n  {url}")
+            # Fallback: h3 elements
+            if not results:
+                for h in soup.find_all("h3"):
+                    text = h.get_text(strip=True)
+                    if len(text) > 5 and len(results) < num_results:
+                        results.append(f"- {text}")
+            return "\n\n".join(results) if results else "No results found. Try a different search."
+        return await asyncio.to_thread(_search)
     except Exception as e:
-        # Final fallback: try scraping
-        try:
-            async with httpx.AsyncClient(timeout=10) as c:
-                c.headers.update({"User-Agent": "Mozilla/5.0"})
-                r = await c.get(f"https://html.duckduckgo.com/html/", params={"q": query})
-                import re
-                results = []
-                for match in re.finditer(r'class="result__title"[^>]*>.*?<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', r.text, re.DOTALL):
-                    title = re.sub(r'<[^>]+>', '', match.group(2)).strip()
-                    if title:
-                        results.append(f"- {title}")
-                return "\n\n".join(results[:num_results]) if results else f"Search failed: {e}"
-        except:
-            return f"Search failed. Please try again."
-
+        return f"Search failed: {e}"
 
 async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
