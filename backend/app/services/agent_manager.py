@@ -33,6 +33,20 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for current information. Use this for news, facts, or anything you don't know.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
@@ -104,6 +118,21 @@ def write_note(uid: str, title: str, content: str) -> str:
     return f"Saved to {path.name}"
 
 
+async def search_web(query: str, num_results: int = 5) -> str:
+    """Search the web using DuckDuckGo and return formatted results."""
+    try:
+        from duckduckgo_search import DDGS
+        results = []
+        async with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=num_results):
+                results.append(f"- {r['title']}: {r['href']}\n  {r.get('body', '')[:200]}")
+        if not results:
+            return "No results found."
+        return "\n\n".join(results)
+    except Exception as e:
+        return f"Search failed: {e}"
+
+
 async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
     uid = profile_dir.split("/")[-1] if profile_dir else user_id
@@ -115,8 +144,9 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     vault = read_vault(uid)
     agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
 
-    system = f"You are {agent_name}, a helpful AI assistant. You can read and save notes to the user's personal vault."
+    system = f"You are {agent_name}, a helpful AI assistant. You can search the web, read and save notes to the user's personal vault."
     system += f"\nCurrent vault notes:\n{vault}" if vault else ""
+    system += "\nWhen you need current information, use the web_search tool."
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -140,6 +170,8 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                     result = write_note(uid, args.get("title", "Note"), args.get("content", ""))
                 elif name == "read_vault":
                     result = read_vault(uid) or "Vault is empty"
+                elif name == "web_search":
+                    result = await search_web(args.get("query", ""))
                 else:
                     result = f"Done."
             except Exception as e:
