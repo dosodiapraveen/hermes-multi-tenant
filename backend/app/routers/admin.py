@@ -190,6 +190,14 @@ async def get_usage(db: AsyncSession = Depends(get_db)):
         "totals": {"messages": totals[0], "tokens": totals[1]},
     }
 
+@router.post("/test-email")
+async def test_email(body: dict = Body(...)):
+    email = body.get("email", "")
+    if not email: raise HTTPException(400, "email required")
+    from app.services.email import send_welcome_email
+    await send_welcome_email(email, "Test User", "pro")
+    return {"status": "sent", "email": email}
+
 # ═══════════════════════════════════════════
 # Invite Links
 # ═══════════════════════════════════════════
