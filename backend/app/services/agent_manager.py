@@ -119,33 +119,40 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> str:
-    """Search the web using Google (scraped via requests + BeautifulSoup)."""
+    """Search the web using multiple free sources (Wikipedia + news)."""
     import asyncio
     try:
-        from bs4 import BeautifulSoup
         import requests
-        def _search():
-            headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-            r = requests.get("https://www.google.com/search", params={"q": query, "num": num_results}, headers=headers, timeout=10)
-            soup = BeautifulSoup(r.text, "html.parser")
+        def _search_news():
+            """Search news via free RSS feeds."""
             results = []
-            # Google result links are in <a> tags with href starting with /url?q=
-            for a in soup.find_all("a", href=True):
-                href = a["href"]
-                if href.startswith("/url?q="):
-                    import urllib.parse
-                    url = urllib.parse.parse_qs(href.split("?", 1)[1]).get("q", [None])[0]
-                    text = a.get_text(strip=True)
-                    if url and text and len(text) > 5 and len(results) < num_results:
-                        results.append(f"- {text}\n  {url}")
-            # Fallback: h3 elements
-            if not results:
-                for h in soup.find_all("h3"):
-                    text = h.get_text(strip=True)
-                    if len(text) > 5 and len(results) < num_results:
-                        results.append(f"- {text}")
-            return "\n\n".join(results) if results else "No results found. Try a different search."
-        return await asyncio.to_thread(_search)
+            base = "https://en.wikipedia.org/w/api.php"
+            # Wikipedia search
+            try:
+                r = requests.get(base, params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": num_results}, timeout=8)
+                for item in r.json().get("query", {}).get("search", []):
+                    title = item.get("title", "")
+                    snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))[:150]
+                    url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
+                    results.append(f"- {title}\n  {snippet}\n  {url}")
+            except:
+                pass
+            # News from newsapi.org fallback - try Google News RSS
+            try:
+                r = requests.get("https://news.google.com/rss/search", params={"q": query, "hl": "en-US", "gl": "US"}, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
+                import xml.etree.ElementTree as ET
+                root = ET.fromstring(r.content)
+                for item in root.findall(".//item")[:num_results]:
+                    title = item.findtext("title", "")
+                    link = item.findtext("link", "")
+                    if title and len(results) < num_results * 2:
+                        results.append(f"- {title}\n  {link}")
+            except:
+                pass
+            return "\n\n".join(results[:num_results * 2]) if results else ""
+        import re
+        result = await asyncio.to_thread(_search_news)
+        return result if result else "I could not find current information on that topic. Try asking in a different way."
     except Exception as e:
         return f"Search failed: {e}"
 
