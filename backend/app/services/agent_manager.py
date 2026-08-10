@@ -131,15 +131,19 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     if tool_calls:
         messages.append({"role": "assistant", "content": content if content else None, "tool_calls": tool_calls})
         for tc in tool_calls:
-            fn = tc.get("function", {})
-            name = fn.get("name", "")
-            args = json.loads(fn.get("arguments", "{}"))
-            if name == "save_note":
-                result = write_note(uid, args.get("title", "Note"), args.get("content", ""))
-            elif name == "read_vault":
-                result = read_vault(uid) or "Vault is empty"
-            else:
-                result = f"Unknown tool: {name}"
+            try:
+                fn = tc.get("function", {})
+                name = fn.get("name", "")
+                args_raw = fn.get("arguments", "{}")
+                args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                if name == "save_note":
+                    result = write_note(uid, args.get("title", "Note"), args.get("content", ""))
+                elif name == "read_vault":
+                    result = read_vault(uid) or "Vault is empty"
+                else:
+                    result = f"Done."
+            except Exception as e:
+                result = f"Error: {e}"
             messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
         # Get final response after tool execution
         content, _ = await call_ai(model, messages, api_key, timeout)
