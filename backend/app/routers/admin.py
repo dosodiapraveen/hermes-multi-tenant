@@ -46,11 +46,12 @@ async def dashboard(db: AsyncSession = Depends(get_db)):
 async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)):
     """Create a user directly with Hermes profile + Obsidian vault. All data stays isolated."""
     phone = body.get("phone_number", "")
+    email = body.get("email", "")
     agent_name = body.get("agent_name", "My Assistant")
     plan = body.get("plan", "pro")
     is_vip = body.get("is_vip", False)
-    if not phone:
-        raise HTTPException(400, "phone_number is required")
+    if not phone and not email:
+        raise HTTPException(400, "phone_number or email is required")
     # Create DB record
     r = await db.execute(text("""
         INSERT INTO user_profiles (phone_number, agent_name, plan, is_vip,
@@ -81,7 +82,18 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
         profile_path = None
 
     await db.execute(text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'admin_create',:det)"),
-        {"uid": uid, "det": f'{{"plan":"{plan}","profile":"{profile_status}"}}'})
+        {"uid": uid, "det": f'{{"plan":"{plan}","profile":"{profile_status}","email":"{email}"}}'})
+
+    # Send welcome email if email was provided
+    if email:
+        try:
+            from app.services.email import send_welcome_email
+            await send_welcome_email(email, agent_name, plan if not is_vip else "vip")
+            email_status = "sent"
+        except Exception as e:
+            email_status = f"failed: {e}"
+    else:
+        email_status = "no_email"
 
     return {
         "status": "ok",
@@ -92,6 +104,7 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
         "profile_path": profile_path,
         "vault_path": vault_path,
         "profile_status": profile_status,
+        "email_status": email_status,
     }
 
 @router.delete("/users/{user_id}")
