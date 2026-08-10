@@ -97,7 +97,7 @@
                 class="copy-btn"
                 @click="copyLink(invite.url || invite.link_url)"
               >
-                {{ copiedId === (invite.id || invite.code) ? 'Copied!' : 'Copy' }}
+                {{ copiedId === (invite.url || invite.link_url) ? 'Copied!' : 'Copy' }}
               </button>
             </td>
           </tr>
@@ -136,7 +136,7 @@ export default {
       try {
         const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/invite-links', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: 'Bearer ' + token },
         })
         if (res.status === 401) {
           localStorage.removeItem('token')
@@ -161,7 +161,7 @@ export default {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            Authorization: 'Bearer ' + token,
           },
           body: JSON.stringify({
             label: this.form.label,
@@ -186,7 +186,7 @@ export default {
     },
     copyLink(url) {
       navigator.clipboard.writeText(url).then(() => {
-        this.copiedId = Date.now()
+        this.copiedId = url
         setTimeout(() => { this.copiedId = null }, 2000)
       }).catch(() => {
         alert('Failed to copy link')
