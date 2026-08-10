@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Request
 from sqlalchemy import text
 from app.config import settings
-from app.database import get_db
+from app.database import async_session_factory
 from app.services.agent_manager import hermes_profile_chat_with_fallback
 from app.services.profile_init import init_user_profile
 import httpx
@@ -18,7 +18,7 @@ async def telegram(request: Request):
     text_msg = body.get("message",{}).get("text","")
     if not chat_id or not text_msg: return {"status":"ok"}
 
-    async with get_db() as db:
+    async with async_session_factory() as db:
         # Check if user exists
         r = await db.execute(text("SELECT id,is_active,profile_path FROM user_profiles WHERE phone_number=:c"),{"c":chat_id})
         u = r.fetchone()
@@ -70,4 +70,5 @@ async def telegram(request: Request):
         async with httpx.AsyncClient() as c:
             await c.post(f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage", json={"chat_id":int(chat_id),"text":resp})
         await db.execute(text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'message',:det)"),{"uid":str(u[0]),"det":'{"platform":"telegram","tokens":'+str(len(text_msg)//4)+'}'})
+        await db.commit()
         return {"status":"ok"}
