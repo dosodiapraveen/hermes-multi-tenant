@@ -215,6 +215,17 @@ async def list_invites(db: AsyncSession = Depends(get_db)):
     r = await db.execute(text("SELECT id,code,label,agent_name,plan,trial_days,is_vip,claimed_by,claimed_at,created_at FROM invite_links ORDER BY created_at DESC LIMIT 50"))
     return [{"id":str(row[0]),"code":row[1],"label":row[2],"agent_name":row[3],"plan":row[4],"trial_days":row[5],"is_vip":row[6],"claimed":row[7] is not None,"link_url":f"{settings.public_url}/join/{row[1]}","created_at":row[9].isoformat()} for row in r.fetchall()]
 
+@router.delete("/invite-links/{invite_id}")
+async def delete_invite(invite_id: str, db: AsyncSession = Depends(get_db)):
+    """Delete an invite link. Only unclaimed invites can be deleted (claimed ones have no extra resources, but we allow cleanup)."""
+    r = await db.execute(text("SELECT id, claimed_by FROM invite_links WHERE id::text=:id"), {"id": invite_id})
+    inv = r.fetchone()
+    if not inv:
+        raise HTTPException(404, "Invite not found")
+    await db.execute(text("DELETE FROM invite_links WHERE id::text=:id"), {"id": invite_id})
+    await db.commit()
+    return {"status": "deleted", "id": invite_id}
+
 # ═══════════════════════════════════════════
 # Global Model Config
 # ═══════════════════════════════════════════

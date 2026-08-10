@@ -99,6 +99,13 @@
               >
                 {{ copiedId === (invite.url || invite.link_url) ? 'Copied!' : 'Copy' }}
               </button>
+              <button
+                class="delete-btn"
+                @click="deleteInvite(invite.id)"
+                :disabled="deleting === invite.id"
+              >
+                {{ deleting === invite.id ? '...' : 'Delete' }}
+              </button>
             </td>
           </tr>
         </tbody>
@@ -114,6 +121,7 @@ export default {
     return {
       loading: true,
       creating: false,
+      deleting: null,
       showForm: false,
       formError: '',
       copiedId: null,
@@ -180,6 +188,7 @@ export default {
         await this.fetchInvites()
       } catch (err) {
         this.formError = err.message
+        console.error('Create invite error:', err)
       } finally {
         this.creating = false
       }
@@ -191,6 +200,23 @@ export default {
       }).catch(() => {
         alert('Failed to copy link')
       })
+    },
+    async deleteInvite(id) {
+      if (!confirm('Delete this invite link?')) return
+      this.deleting = id
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/admin/invite-links/' + id, {
+          method: 'DELETE',
+          headers: { Authorization: 'Bearer ' + token },
+        })
+        if (!res.ok) throw new Error('Delete failed')
+        await this.fetchInvites()
+      } catch (err) {
+        alert(err.message)
+      } finally {
+        this.deleting = null
+      }
     },
   },
 }
@@ -504,6 +530,17 @@ export default {
   background: rgba(108, 92, 231, 0.05);
   border-color: #6C5CE7;
 }
+
+.delete-btn {
+  margin-left: 8px; padding: 6px 14px;
+  border: 1.5px solid #FEB2B2; background: #fff;
+  color: #E53E3E; font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 600;
+  border-radius: 6px; cursor: pointer;
+  transition: all 0.15s;
+}
+.delete-btn:hover:not(:disabled) { background: #FFF5F5; border-color: #FC8181; }
+.delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .empty-state {
   text-align: center;
