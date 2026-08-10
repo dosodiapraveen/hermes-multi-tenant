@@ -181,7 +181,10 @@ export default {
         })
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data.detail || data.message || 'Failed to create invite')
+          const msg = typeof data.detail === 'string' ? data.detail :
+                      Array.isArray(data.detail) ? data.detail.map(e => e.msg || JSON.stringify(e)).join('; ') :
+                      data.message || 'Failed (' + res.status + ')'
+          throw new Error(msg)
         }
         this.form = { label: '', agent_name: '', plan: 'trial', trial_days: 7, is_vip: false }
         this.showForm = false
