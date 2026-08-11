@@ -78,7 +78,7 @@ async def telegram(request: Request):
                         else:
                             await send_tg(chat_id, "❌ This link is invalid or expired.")
                         return {"status": "ok"}
-                    uid = link[0]
+                    uid = str(link[0])
                     name = link[1] or "Agent"
                     # Update user's phone_number to their Telegram chat_id
                     await db.execute(text("UPDATE user_profiles SET phone_number=:c WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
