@@ -119,41 +119,31 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> tuple:
-    """Search using Gemini + Google Search grounding. Returns (answer_with_citations, raw_results)."""
-    import asyncio, os, json
-    api_key = os.environ.get("GOOGLE_API_KEY", "")
+    """Search using Brave Search API. Returns (formatted_results, sources_list)."""
+    import asyncio, os
+    api_key = os.environ.get("BRAVE_API_KEY", "")
     if not api_key:
-        # Fallback to Wikipedia
         return await _search_fallback(query, num_results)
     try:
         import httpx
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-        body = {
-            "contents": [{"parts": [{"text": f"Search for: {query}. Provide a thorough answer with specific data, names, numbers, and cite your sources with links."}]}],
-            "tools": [{"google_search": {}}]
-        }
-        async with httpx.AsyncClient(timeout=20) as c:
-            r = await c.post(url, json=body)
+        headers = {"X-Subscription-Token": api_key, "Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=12) as c:
+            r = await c.get("https://api.search.brave.com/res/v1/web/search", params={"q": query, "count": num_results}, headers=headers)
             if r.status_code != 200:
-                raise Exception(f"Gemini returned {r.status_code}")
+                raise Exception(f"Brave returned {r.status_code}")
             data = r.json()
-            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            # Extract grounding/source info
-            sources = ""
-            grounding = data.get("candidates", [{}])[0].get("grounding_metadata", {})
-            if grounding:
-                chunks = grounding.get("grounding_chunks", [])
-                if chunks:
-                    source_lines = []
-                    for i, chunk in enumerate(chunks[:5]):
-                        src = chunk.get("web", {})
-                        title = src.get("title", "")
-                        url = src.get("uri", "")
-                        if title and url:
-                            source_lines.append(f"{i+1}. {title} - {url}")
-                    if source_lines:
-                        sources = "\n".join(source_lines)
-            return text, sources
+            results = (data.get("web", {}) or {}).get("results", []) or []
+            lines = []
+            sources = []
+            for i, res in enumerate(results[:num_results]):
+                title = res.get("title", "")
+                desc = res.get("description", "")[:200]
+                url = res.get("url", "")
+                lines.append(f"- {title}\n  {desc}\n  {url}")
+                sources.append(f"{i+1}. {title} - {url}")
+            text = "\n\n".join(lines) if lines else "No results found."
+            sources_text = "\n".join(sources)
+            return text, sources_text
     except Exception as e:
         return await _search_fallback(query, num_results)
 
@@ -210,12 +200,20 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Gemini handled search + analysis in one call
-        content, sources = await search_web(message, 5)
+        # Brave search → DeepSeek analyzes and presents naturally
+        results, sources = await search_web(message, 5)
+        context = f"Search results for: {message}\n\n{results}"
         if sources:
-            content += f"\n\n📚 Sources:\n{sources}"
-        save_memory(uid, message, content)
-        return content
+            context += f"\n\nSources:\n{sources}"
+        context += "\n\nUsing the search results above, answer the user's question directly and naturally. Include specific data, names, numbers, and link to sources. Do not mention that you searched."
+        search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
+        content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
+        if not content or len(content) < 20:
+            retry = [{"role": "system", "content": "Answer the question using this data. Be direct and include details."}]
+            retry.append({"role": "user", "content": f"Data:\n{results}\n\nQuestion: {message}"})
+            content, _ = await call_ai(model, retry, api_key, timeout)
+        save_memory(uid, message, content or "Search completed.")
+        return content or "Search completed."
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
