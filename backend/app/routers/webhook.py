@@ -66,38 +66,24 @@ async def telegram(request: Request):
                 # Handle telegram-link codes (link existing user to Telegram)
                 if code.startswith("link_"):
                     r = await db.execute(
-                        text("SELECT id, agent_name, phone_number FROM user_profiles WHERE id::text IN (SELECT claimed_by FROM invite_links WHERE code=:c )"),
-                        {"c": code},
-                    )
-                    u = r.fetchone()
-                    if u:
-                        # Already linked
-                        await send_tg(chat_id, "You're already connected! Send me any message.")
-                        return {"status": "ok"}
-                    # Find the link code and the user
-                    r = await db.execute(
-                        text("SELECT label FROM invite_links WHERE code=:c  AND claimed_by IS NULL"),
+                        text("SELECT claimed_by, agent_name FROM invite_links WHERE code=:c AND claimed_by IS NOT NULL"),
                         {"c": code},
                     )
                     link = r.fetchone()
                     if not link:
-                        await send_tg(chat_id, "❌ This link is invalid or expired.")
-                        return {"status": "invalid"}
-                    # Find the user by label (stored as "TG link {name}")
-                    label = link[0] or ""
-                    name = label.replace("TG link ", "") if "TG link" in label else "Agent"
-                    r = await db.execute(
-                        text("SELECT id FROM user_profiles WHERE agent_name=:n AND id::text NOT IN (SELECT COALESCE(claimed_by,'') FROM invite_links claimed_by IS NOT NULL) LIMIT 1"),
-                        {"n": name},
-                    )
-                    user = r.fetchone()
-                    if not user:
-                        await send_tg(chat_id, "❌ Could not find your account. Contact your admin.")
-                        return {"status": "not_found"}
-                    uid = str(user[0])
-                    # Update phone_number to chat_id and mark link as claimed
+                        # Possibly already claimed
+                        r2 = await db.execute(text("SELECT claimed_by FROM invite_links WHERE code=:c"), {"c": code})
+                        if r2.fetchone():
+                            await send_tg(chat_id, "✅ You're already connected! Send me any message.")
+                        else:
+                            await send_tg(chat_id, "❌ This link is invalid or expired.")
+                        return {"status": "ok"}
+                    uid = link[0]
+                    name = link[1] or "Agent"
+                    # Update user's phone_number to their Telegram chat_id
                     await db.execute(text("UPDATE user_profiles SET phone_number=:c WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
-                    await db.execute(text("UPDATE invite_links SET claimed_by=:u, claimed_at=NOW() WHERE code=:c"), {"u": uid, "c": code})
+                    # Mark link as fully claimed (clear claimed_by to avoid re-use, or keep as record)
+                    await db.execute(text("DELETE FROM invite_links WHERE code=:c"), {"c": code})
                     await db.commit()
                     # Initialize profile if needed
                     try:
@@ -105,8 +91,14 @@ async def telegram(request: Request):
                         if not (Path("/opt/hermes/profiles") / uid / "config.yaml").exists():
                             profile = init_user_profile(user_id=uid, agent_name=name, plan="pro")
                             await db.execute(text("UPDATE user_profiles SET profile_path=:pp WHERE id::text=:uid"), {"pp": profile["profile_dir"], "uid": uid})
-                    except: pass
-                    await send_tg(chat_id, f"✅ *Connected!* Your Telegram is now linked to your agent.\n\nTry saying: *\"Save a note\"* or *\"What's in my vault?\"*")
+                    except:
+                        pass
+                    await send_tg(chat_id,
+                        f"✅ *Connected!* Your Telegram is now linked to **{name}**.\n\n"
+                        f"Try saying:\n"
+                        f"📝 *\"Save a note about...\"*\n"
+                        f"🌐 *\"Search for...\"*\n"
+                        f"📖 *\"What's in my vault?\"*")
                     return {"status": "linked"}
 
                 # Handle invite codes (new users)
