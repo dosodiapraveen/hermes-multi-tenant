@@ -58,50 +58,46 @@ async def telegram(request: Request):
         )
         u = r.fetchone()
 
-        # ── New user: handle /start INVITE_CODE ──
-        if not u:
-            if text_msg.startswith("/start "):
-                code = text_msg.split(" ", 1)[1].strip()
+        # ── Handle /start commands for ALL users (existing or not) ──
+        if text_msg.startswith("/start "):
+            code = text_msg.split(" ", 1)[1].strip()
 
-                # Handle telegram-link codes (link existing user to Telegram)
-                if code.startswith("link_"):
-                    r = await db.execute(
-                        text("SELECT claimed_by, agent_name FROM invite_links WHERE code=:c AND claimed_by IS NOT NULL"),
-                        {"c": code},
-                    )
-                    link = r.fetchone()
-                    if not link:
-                        # Possibly already claimed
-                        r2 = await db.execute(text("SELECT claimed_by FROM invite_links WHERE code=:c"), {"c": code})
-                        if r2.fetchone():
-                            await send_tg(chat_id, "✅ You're already connected! Send me any message.")
-                        else:
-                            await send_tg(chat_id, "❌ This link is invalid or expired.")
-                        return {"status": "ok"}
-                    uid = str(link[0])
-                    name = link[1] or "Agent"
-                    # Update user's phone_number to their Telegram chat_id
-                    await db.execute(text("UPDATE user_profiles SET phone_number=:c WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
-                    # Mark link as fully claimed (clear claimed_by to avoid re-use, or keep as record)
-                    await db.execute(text("DELETE FROM invite_links WHERE code=:c"), {"c": code})
-                    await db.commit()
-                    # Initialize profile if needed
-                    try:
-                        from pathlib import Path
-                        if not (Path("/opt/hermes/profiles") / uid / "config.yaml").exists():
-                            profile = init_user_profile(user_id=uid, agent_name=name, plan="pro")
-                            await db.execute(text("UPDATE user_profiles SET profile_path=:pp WHERE id::text=:uid"), {"pp": profile["profile_dir"], "uid": uid})
-                    except:
-                        pass
-                    await send_tg(chat_id,
-                        f"✅ *Connected!* Your Telegram is now linked to **{name}**.\n\n"
-                        f"Try saying:\n"
-                        f"📝 *\"Save a note about...\"*\n"
-                        f"🌐 *\"Search for...\"*\n"
-                        f"📖 *\"What's in my vault?\"*")
-                    return {"status": "linked"}
+            # Handle telegram-link codes (link existing user to Telegram)
+            if code.startswith("link_"):
+                r = await db.execute(
+                    text("SELECT claimed_by, agent_name FROM invite_links WHERE code=:c AND claimed_by IS NOT NULL"),
+                    {"c": code},
+                )
+                link = r.fetchone()
+                if not link:
+                    r2 = await db.execute(text("SELECT claimed_by FROM invite_links WHERE code=:c"), {"c": code})
+                    if r2.fetchone():
+                        await send_tg(chat_id, "✅ You're already connected! Send me any message.")
+                    else:
+                        await send_tg(chat_id, "❌ This link is invalid or expired.")
+                    return {"status": "ok"}
+                uid = str(link[0])
+                name = link[1] or "Agent"
+                await db.execute(text("UPDATE user_profiles SET phone_number=:c WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
+                await db.execute(text("DELETE FROM invite_links WHERE code=:c"), {"c": code})
+                await db.commit()
+                try:
+                    from pathlib import Path
+                    if not (Path("/opt/hermes/profiles") / uid / "config.yaml").exists():
+                        profile = init_user_profile(user_id=uid, agent_name=name, plan="pro")
+                        await db.execute(text("UPDATE user_profiles SET profile_path=:pp WHERE id::text=:uid"), {"pp": profile["profile_dir"], "uid": uid})
+                except:
+                    pass
+                await send_tg(chat_id,
+                    f"✅ *Connected!* Your Telegram is now linked to **{name}**.\n\n"
+                    f"Try saying:\n"
+                    f"📝 *\"Save a note about...\"*\n"
+                    f"🌐 *\"Search for...\"*\n"
+                    f"📖 *\"What's in my vault?\"*")
+                return {"status": "linked"}
 
-                # Handle invite codes (new users)
+            # Handle invite codes (new users only)
+            if not u:
                 r = await db.execute(
                     text("SELECT id,label,agent_name,plan,trial_days,is_vip FROM invite_links WHERE code=:c AND claimed_by IS NULL"),
                     {"c": code},
