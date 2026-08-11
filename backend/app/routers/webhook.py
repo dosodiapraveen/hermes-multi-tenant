@@ -151,7 +151,6 @@ async def telegram(request: Request):
             try:
                 file_id = doc.get("file_id", "")
                 file_name = doc.get("file_name", "document")
-                # Get file path from Telegram
                 async with httpx.AsyncClient() as c:
                     fr = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile?file_id={file_id}")
                     fp = fr.json().get("result", {}).get("file_path", "")
@@ -162,15 +161,50 @@ async def telegram(request: Request):
                         kb_dir.mkdir(parents=True, exist_ok=True)
                         save_path = kb_dir / file_name
                         save_path.write_bytes(dl.content)
-                        await send_tg(chat_id, f"📎 Saved **{file_name}** to your knowledge base. You can now ask me questions about it!")
+                        await send_tg(chat_id, f"📎 Saved **{file_name}** to your knowledge base.")
                         stop_typing.set()
                         typing_task.cancel()
                         return {"status": "document_saved"}
             except Exception as e:
-                await send_tg(chat_id, f"⚠️ Couldn't save the document. Please try again.")
+                await send_tg(chat_id, "⚠️ Couldn't save the document. Please try again.")
                 stop_typing.set()
                 typing_task.cancel()
                 return {"status": "doc_error"}
+
+        # Handle voice messages — transcribe and process as text
+        voice = body.get("message", {}).get("voice", None)
+        if voice:
+            try:
+                file_id = voice.get("file_id", "")
+                async with httpx.AsyncClient() as c:
+                    fr = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile?file_id={file_id}")
+                    fp = fr.json().get("result", {}).get("file_path", "")
+                    if fp:
+                        dl = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/{fp}")
+                        # Save OGG, convert to WAV, transcribe
+                        ogg_path = Path(f"/tmp/voice_{chat_id}.ogg")
+                        wav_path = Path(f"/tmp/voice_{chat_id}.wav")
+                        ogg_path.write_bytes(dl.content)
+                        # Convert to WAV using pydub
+                        from pydub import AudioSegment
+                        audio = AudioSegment.from_ogg(str(ogg_path))
+                        audio.export(str(wav_path), format="wav")
+                        # Transcribe using SpeechRecognition
+                        import speech_recognition as sr
+                        recognizer = sr.Recognizer()
+                        with sr.AudioFile(str(wav_path)) as source:
+                            audio_data = recognizer.record(source)
+                            text_msg = recognizer.recognize_google(audio_data)
+                        # Cleanup temp files
+                        ogg_path.unlink(missing_ok=True)
+                        wav_path.unlink(missing_ok=True)
+                        await send_tg(chat_id, f"🎤 *You said:* {text_msg}")
+                # Fall through to regular agent processing with transcribed text_msg
+            except Exception as e:
+                await send_tg(chat_id, "⚠️ Couldn't transcribe your voice message. Please try again or type instead.")
+                stop_typing.set()
+                typing_task.cancel()
+                return {"status": "voice_error"}
 
         try:
             resp = await hermes_profile_chat_with_fallback(
