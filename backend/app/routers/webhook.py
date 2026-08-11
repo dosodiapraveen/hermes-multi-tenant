@@ -13,11 +13,11 @@ router = APIRouter()
 WELCOME = (
     "🎉 **Welcome! Your AI agent is ready.**\n\n"
     "Here's what I can do:\n"
-    "📝 **Save notes** — *\"Save this idea\"*\n"
-    "📖 **Read your vault** — *\"What notes do I have?\"*\n"
-    "🌐 **Search the web** — *\"Search for...\"*\n"
-    "💾 **Remember** — I remember our conversations\n\n"
-    "Just send me a message to start!"
+    "📝 *\"Save a note about...\"* — I'll store it in your vault\n"
+    "📖 *\"What notes do I have?\"* — I'll read your vault\n"
+    "🌐 *\"Search for...\"* — I'll find and summarize\n"
+    "💾 I remember our conversations\n\n"
+    "👉 **Try saying:** *\"Save a note about my meeting today\"* or *\"Search for the latest AI news\"*"
 )
 
 async def typing_indicator(chat_id: str, stop_event: asyncio.Event):
