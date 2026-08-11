@@ -47,6 +47,14 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_knowledge_base",
+            "description": "Read documents from the user's knowledge base (uploaded PDFs, docs, reports). Use this when the user asks about their uploaded documents or stored knowledge.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
@@ -118,6 +126,21 @@ def write_note(uid: str, title: str, content: str) -> str:
     return f"Saved to {path.name}"
 
 
+def read_knowledge_base(uid: str) -> str:
+    """Read uploaded documents from the user's knowledge base."""
+    kb_dir = PROFILES_ROOT.parent / "obsidian" / uid / "Knowledge"
+    if not kb_dir.exists():
+        return "No documents in your knowledge base yet. Upload a PDF or document to get started."
+    docs = []
+    for f in sorted(kb_dir.iterdir())[:10]:
+        if f.suffix.lower() in (".txt", ".md", ".csv"):
+            docs.append(f"--- {f.name} ---\n{f.read_text()[:1500]}")
+        else:
+            size = f.stat().st_size
+            docs.append(f"--- {f.name} ({size//1024} KB) ---\nUploaded document. Ask me about its contents.")
+    return "\n\n".join(docs) if docs else "Knowledge base is empty."
+
+
 async def search_web(query: str, num_results: int = 5) -> tuple:
     """Search using Brave Search API. Returns (formatted_results, sources_list)."""
     import asyncio, os
@@ -179,10 +202,12 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
 
     memories = load_memories(uid)
     vault = read_vault(uid)
+    kb = read_knowledge_base(uid)
     agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
 
-    system = f"You are {agent_name}, a helpful AI assistant with web search, vault read/write, and memory tools."
-    system += f"\n\nCurrent vault notes:\n{vault}" if vault else ""
+    system = f"You are {agent_name}, a helpful AI assistant with web search, vault read/write, knowledge base, and memory tools."
+    system += f"\n\n📚 Your knowledge base contains:\n{kb}" if kb and "No documents" not in kb else ""
+    system += f"\n\n📝 Your vault:\n{vault}" if vault else ""
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -233,6 +258,8 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                         result = read_vault(uid) or "Vault is empty"
                     elif name == "web_search":
                         result, _ = await search_web(args.get("query", ""))
+                    elif name == "read_knowledge_base":
+                        result = read_knowledge_base(uid)
                     else:
                         result = "Done."
                 except Exception as e:

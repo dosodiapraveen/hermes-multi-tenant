@@ -7,6 +7,7 @@ from app.services.agent_manager import hermes_profile_chat_with_fallback
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
 from datetime import datetime, timedelta
+from pathlib import Path
 
 router = APIRouter()
 
@@ -143,6 +144,33 @@ async def telegram(request: Request):
         # ── Process message with typing indicator ──
         stop_typing = asyncio.Event()
         typing_task = asyncio.create_task(typing_indicator(chat_id, stop_typing))
+
+        # Handle document uploads (PDFs, docs, etc.) to knowledge base
+        doc = body.get("message", {}).get("document", None)
+        if doc:
+            try:
+                file_id = doc.get("file_id", "")
+                file_name = doc.get("file_name", "document")
+                # Get file path from Telegram
+                async with httpx.AsyncClient() as c:
+                    fr = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile?file_id={file_id}")
+                    fp = fr.json().get("result", {}).get("file_path", "")
+                    if fp:
+                        dl = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/{fp}")
+                        uid = str(u[0])
+                        kb_dir = Path("/opt/hermes/obsidian") / uid / "Knowledge"
+                        kb_dir.mkdir(parents=True, exist_ok=True)
+                        save_path = kb_dir / file_name
+                        save_path.write_bytes(dl.content)
+                        await send_tg(chat_id, f"📎 Saved **{file_name}** to your knowledge base. You can now ask me questions about it!")
+                        stop_typing.set()
+                        typing_task.cancel()
+                        return {"status": "document_saved"}
+            except Exception as e:
+                await send_tg(chat_id, f"⚠️ Couldn't save the document. Please try again.")
+                stop_typing.set()
+                typing_task.cancel()
+                return {"status": "doc_error"}
 
         try:
             resp = await hermes_profile_chat_with_fallback(
