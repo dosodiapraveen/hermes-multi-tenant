@@ -3,7 +3,6 @@
 # Run: bash test_all.sh [--verbose]
 # Add new tests here when features are added
 
-set -e
 PASS=0
 FAIL=0
 SKIP=0
