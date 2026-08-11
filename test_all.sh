@@ -206,6 +206,11 @@ else
   skip "Web search" "Brave API unavailable or timeout"
 fi
 
+# Voice transcription check
+r=$(ssh -i ~/.ssh/hermes_deploy root@167.233.158.68 \
+  "docker exec --workdir /app hermes-multi-tenant-api-1 timeout 10 python3 -c 'import speech_recognition as sr; print(sr.__version__)' 2>/dev/null" 2>/dev/null || echo "FAIL")
+[[ "$r" != "FAIL" ]] && pass "Voice transcription module ($r)" || skip "Voice transcription" "not installed"
+
 # ── 7. Security ──
 header "7. Security"
 
