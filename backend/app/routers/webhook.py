@@ -136,7 +136,7 @@ async def telegram(request: Request):
                 await send_tg(chat_id, "👋 I don't know you yet! You need an invite link to use this bot.")
                 return {"status": "ignored"}
 
-        if not u[1]:
+        if not u or not u[1]:
             await send_tg(chat_id, "⏳ Your account is inactive. Contact your admin.")
             return {"status": "inactive"}
 
