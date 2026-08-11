@@ -191,7 +191,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
         tc = {"id": "auto_search", "type": "function", "function": {"name": "web_search", "arguments": json.dumps({"query": message})}}
         messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
         messages.append({"role": "tool", "tool_call_id": "auto_search", "content": results})
-        content, tool_calls = await call_ai(model, messages, api_key, timeout)
+        content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
