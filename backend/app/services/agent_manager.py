@@ -185,12 +185,14 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Run search, return results directly (bypass model refusal to present them)
+        # Run search, feed results to model for analysis
         results = await search_web(message, 5)
-        content = f"Here's what I found:\n\n{results}\n\n"
-        content += "📌 *Tip:* Tap a link above to visit the page."
-        save_memory(uid, message, content)
-        return content
+        # Add results as conversation context for the model to analyze
+        search_context = {"role": "system", "content": f"Search results for query '{message}':\n\n{results}\n\nAnalyze these results and provide a thorough, well-organized answer. Include relevant details from the snippets and links for further reading."}
+        messages.insert(1, search_context)  # After main system prompt
+        content, tool_calls = await call_ai(model, messages, api_key, timeout)
+        save_memory(uid, message, content or "Search completed.")
+        return content or "Search completed."
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
