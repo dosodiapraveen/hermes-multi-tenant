@@ -210,15 +210,14 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Run search, feed results to model for analysis
+        # Run search, feed results to model for analysis (no memory needed)
         results, page_content = await search_web(message, 5)
         context = f"Search results for query '{message}':\n{results}"
         if page_content:
             context += f"\n\n--- Content from top result ---\n{page_content}"
         context += "\n\nUsing the information above, provide a thorough answer. Include specific details, data, and links. If the search results contain the answer, present it directly."
-        search_context = {"role": "system", "content": context}
-        messages.insert(1, search_context)  # After main system prompt
-        content, tool_calls = await call_ai(model, messages, api_key, timeout)
+        search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
+        content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
         save_memory(uid, message, content or "Search completed.")
         return content or "Search completed."
     else:
