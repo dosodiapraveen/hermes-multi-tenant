@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     backup_model TEXT NOT NULL DEFAULT 'accounts/fireworks/models/deepseek-v4',
     model_overridden_at TIMESTAMPTZ, is_active BOOLEAN NOT NULL DEFAULT TRUE,
     profile_path TEXT,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -198,6 +198,21 @@ async def test_email(body: dict = Body(...)):
     await send_welcome_email(email, "Test User", "pro")
     return {"status": "sent", "email": email}
 
+@router.post("/users/{user_id}/timezone")
+async def set_user_timezone(user_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db)):
+    tz = body.get("timezone", "")
+    if not tz: raise HTTPException(400, "timezone required")
+    r = await db.execute(text("UPDATE user_profiles SET timezone=:tz WHERE id::text=:uid"), {"tz": tz, "uid": user_id})
+    await db.commit()
+    return {"status": "ok"}
+
+@router.get("/users/{user_id}")
+async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
+    r = await db.execute(text("SELECT id, agent_name, phone_number, timezone, plan, is_active FROM user_profiles WHERE id::text=:uid"), {"uid": user_id})
+    u = r.fetchone()
+    if not u: raise HTTPException(404, "User not found")
+    return {"id": str(u[0]), "agent_name": u[1], "phone_number": u[2], "timezone": u[3], "plan": u[4], "is_active": u[5]}
+
 @router.post("/users/{user_id}/telegram-link")
 async def create_telegram_link(user_id: str, db: AsyncSession = Depends(get_db)):
     import secrets
