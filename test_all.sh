@@ -47,7 +47,7 @@ r=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/join/test123" --max-time $API_
 [[ "$r" == "200" ]] && pass "Join page (invite redemption)" || fail "Join page" "got $r"
 
 # 1e. Docker containers running
-r=$(ssh -i ~/.ssh/hermes_deploy root@167.233.158.68 "docker ps --format '{{.Names}}' 2>/dev/null | grep -c 'hermes'" 2>/dev/null || echo "0")
+r=$(ssh -i ~/.ssh/hermes_deploy root@167.233.158.68 'docker ps --format "{{.Names}}" 2>/dev/null' 2>/dev/null | grep -c hermes || echo "0")
 [[ "$r" -ge 4 ]] && pass "Docker containers running ($r)" || fail "Docker containers" "found $r"
 
 # 1f. TLS/HTTPS
