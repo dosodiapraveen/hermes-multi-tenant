@@ -210,17 +210,15 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Run search, feed results to model for analysis (no memory needed)
+        # Search + scrape, return content directly (no model refusal to worry about)
         results, page_content = await search_web(message, 5)
-        context = f"Search results for query '{message}':\n{results}"
         if page_content:
-            context += f"\n\n--- Content from top result ---\n{page_content}"
-        context += "\n\nUse the search results to answer. If you found the specific information, share it with details. If the results only contain links to the information, present those links to the user so they can visit them. ALWAYS provide a response — never give an empty answer."
-        search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
-        content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
-        if not content:
-            # Model gave empty response - present search results directly
-            content = f"I searched for that and found these resources:\n\n{results[:1000]}\n\n📌 You can tap a link above to visit the page."
+            # Extract meaningful lines for a clean response
+            lines = [l.strip() for l in page_content.split("\n") if len(l.strip()) > 30]
+            clean = "\n".join(lines[:30])[:2000]
+            content = f"Here's what I found:\n\n{clean}\n\n---\nSource: SearXNG search"
+        else:
+            content = f"I found these resources:\n\n{results[:1200]}"
         save_memory(uid, message, content)
         return content
     else:
