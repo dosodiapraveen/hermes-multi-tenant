@@ -215,11 +215,14 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
         context = f"Search results for query '{message}':\n{results}"
         if page_content:
             context += f"\n\n--- Content from top result ---\n{page_content}"
-        context += "\n\nUsing the search results above, provide a thorough answer. If the page content contains the answer, include specific details. If not, present the links and tell the user where to find the information."
+        context += "\n\nUse the search results to answer. If you found the specific information, share it with details. If the results only contain links to the information, present those links to the user so they can visit them. ALWAYS provide a response — never give an empty answer."
         search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
         content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
-        save_memory(uid, message, content or "Search completed.")
-        return content or "Search completed."
+        if not content:
+            # Model gave empty response - present search results directly
+            content = f"I searched for that and found these resources:\n\n{results[:1000]}\n\n📌 You can tap a link above to visit the page."
+        save_memory(uid, message, content)
+        return content
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
