@@ -170,7 +170,6 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
 
     system = f"You are {agent_name}, a helpful AI assistant with web search, vault read/write, and memory tools."
     system += f"\n\nCurrent vault notes:\n{vault}" if vault else ""
-    system += "\n\nIMPORTANT: When I give you search results, those ARE the results - present them to the user. Include links. Do not say you will search further or try to fetch more data."
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -186,13 +185,12 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Run search first, then let model respond with results
+        # Run search, return results directly (bypass model refusal to present them)
         results = await search_web(message, 5)
-        import json
-        tc = {"id": "auto_search", "type": "function", "function": {"name": "web_search", "arguments": json.dumps({"query": message})}}
-        messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
-        messages.append({"role": "tool", "tool_call_id": "auto_search", "content": results})
-        content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
+        content = f"Here's what I found:\n\n{results}\n\n"
+        content += "📌 *Tip:* Tap a link above to visit the page."
+        save_memory(uid, message, content)
+        return content
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
