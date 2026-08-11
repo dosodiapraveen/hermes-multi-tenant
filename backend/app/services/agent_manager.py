@@ -215,7 +215,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
         context = f"Search results for query '{message}':\n{results}"
         if page_content:
             context += f"\n\n--- Content from top result ---\n{page_content}"
-        context += "\n\nUsing the information above, provide a thorough answer. Include specific details, data, and links. If the search results contain the answer, present it directly."
+        context += "\n\nUsing the search results above, provide a thorough answer. If the page content contains the answer, include specific details. If not, present the links and tell the user where to find the information."
         search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
         content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
         save_memory(uid, message, content or "Search completed.")
