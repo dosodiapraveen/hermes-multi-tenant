@@ -168,9 +168,8 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     vault = read_vault(uid)
     agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
 
-    system = f"You are {agent_name}, a helpful AI assistant. You can search the web, read and save notes to the user's personal vault."
-    system += f"\nCurrent vault notes:\n{vault}" if vault else ""
-    system += "\nIMPORTANT: When the user asks you to look something up, find information, or search, you MUST use the web_search tool. Do not just say you will search — actually call the tool and provide the results."
+    system = f"You are {agent_name}, a helpful AI assistant with web search, vault read/write, and memory tools."
+    system += f"\n\nCurrent vault notes:\n{vault}" if vault else ""
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -178,31 +177,45 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
             messages.append({"role": m.get("role", "user"), "content": m["content"]})
     messages.append({"role": "user", "content": message})
 
-    # Call AI with tools
-    content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
+    # Auto-trigger web_search for search-like queries (model often refuses)
+    search_triggers = ["search", "look up", "lookup", "find", "what is", "who is",
+                       "top ", "latest", "news about", "weather", "how to",
+                       "tell me about", "show me"]
+    msg_lower = message.lower()
+    should_search = any(t in msg_lower for t in search_triggers)
 
-    # Handle tool calls
-    if tool_calls:
-        messages.append({"role": "assistant", "content": content if content else None, "tool_calls": tool_calls})
-        for tc in tool_calls:
-            try:
-                fn = tc.get("function", {})
-                name = fn.get("name", "")
-                args_raw = fn.get("arguments", "{}")
-                args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
-                if name == "save_note":
-                    result = write_note(uid, args.get("title", "Note"), args.get("content", ""))
-                elif name == "read_vault":
-                    result = read_vault(uid) or "Vault is empty"
-                elif name == "web_search":
-                    result = await search_web(args.get("query", ""))
-                else:
-                    result = f"Done."
-            except Exception as e:
-                result = f"Error: {e}"
-            messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
-        # Get final response after tool execution
-        content, _ = await call_ai(model, messages, api_key, timeout)
+    if should_search:
+        # Run search first, then let model respond with results
+        results = await search_web(message, 5)
+        messages.append({"role": "assistant", "content": f"I'll search for: {message}"})
+        messages.append({"role": "tool", "tool_call_id": "auto_search", "content": results})
+        content, tool_calls = await call_ai(model, messages, api_key, timeout)
+    else:
+        # Normal flow - let model decide if it needs tools
+        content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
+
+        # Handle tool calls
+        if tool_calls:
+            messages.append({"role": "assistant", "content": content if content else None, "tool_calls": tool_calls})
+            for tc in tool_calls:
+                try:
+                    fn = tc.get("function", {})
+                    name = fn.get("name", "")
+                    args_raw = fn.get("arguments", "{}")
+                    args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                    if name == "save_note":
+                        result = write_note(uid, args.get("title", "Note"), args.get("content", ""))
+                    elif name == "read_vault":
+                        result = read_vault(uid) or "Vault is empty"
+                    elif name == "web_search":
+                        result = await search_web(args.get("query", ""))
+                    else:
+                        result = "Done."
+                except Exception as e:
+                    result = f"Error: {e}"
+                messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
+            # Get final response after tool execution
+            content, _ = await call_ai(model, messages, api_key, timeout)
 
     save_memory(uid, message, content or "")
     return content or "Done."
