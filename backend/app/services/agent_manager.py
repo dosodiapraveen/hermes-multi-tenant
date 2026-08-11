@@ -137,22 +137,26 @@ async def search_web(query: str, num_results: int = 5) -> tuple:
                 snippet = res.get("content", "")[:200]
                 search_lines.append(f"- {title}\n  {snippet}\n  {url}")
 
-            # Scrape the top result for actual content
+            # Scrape the top result for actual content (fast timeout, best-effort)
             if results:
                 top_url = results[0].get("url", "")
                 if top_url:
                     try:
-                        r2 = await c.get(top_url, follow_redirects=True, timeout=10,
+                        import re
+                        r2 = await c.get(top_url, follow_redirects=True, timeout=5,
                             headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
-                        # Extract text content
-                        text = re.sub(r"<script[^>]*>.*?</script>", "", r2.text, flags=re.DOTALL)
+                        text = r2.text
+                        # Remove scripts and styles
+                        text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
                         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-                        text = re.sub(r"<[^>]+>", " ", text)
-                        text = re.sub(r"\s+", " ", text).strip()
-                        # Find the main content area (skip headers/footers)
-                        page_content = text[:3000]
+                        # Get all visible text
+                        text = re.sub(r"<[^>]+>", "\n", text)
+                        text = re.sub(r"\n\s*\n", "\n", text).strip()
+                        # Take first 2000 chars of meaningful content
+                        lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 20]
+                        page_content = "\n".join(lines[:80])[:2500]
                     except:
-                        page_content = ""
+                        page_content = ""  # Scraping failed, use search snippets only
 
         search_text = "\n\n".join(search_lines) if search_lines else "No results found."
         if page_content:
@@ -210,8 +214,8 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
         results, page_content = await search_web(message, 5)
         context = f"Search results for query '{message}':\n{results}"
         if page_content:
-            context += f"\n\n--- Extracted page content ---\n{page_content}"
-        context += "\n\nAnalyze these results and provide a thorough answer with actual data from the page content."
+            context += f"\n\n--- Content from top result ---\n{page_content}"
+        context += "\n\nUsing the information above, provide a thorough answer. Include specific details, data, and links. If the search results contain the answer, present it directly."
         search_context = {"role": "system", "content": context}
         messages.insert(1, search_context)  # After main system prompt
         content, tool_calls = await call_ai(model, messages, api_key, timeout)
