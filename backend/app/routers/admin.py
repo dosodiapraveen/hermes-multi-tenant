@@ -206,7 +206,7 @@ async def create_telegram_link(user_id: str, db: AsyncSession = Depends(get_db))
     if not u: raise HTTPException(404, "User not found")
     uid, name = str(u[0]), u[1] or "Agent"
     code = "link_" + secrets.token_urlsafe(16)
-    await db.execute(text("INSERT INTO invite_links (code, label, agent_name, plan) VALUES (:c, :l, :a, 'link')"),
+    await db.execute(text("INSERT INTO invite_links (code, label, agent_name, plan, trial_days) VALUES (:c, :l, :a, 'pro', 0)"),
         {"c": code, "l": f"TG link {name}", "a": name})
     await db.commit()
     return {"code": code, "link_url": f"https://t.me/BotBePreparedBot?start={code}"}

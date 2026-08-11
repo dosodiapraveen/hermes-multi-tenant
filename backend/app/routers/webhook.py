@@ -66,7 +66,7 @@ async def telegram(request: Request):
                 # Handle telegram-link codes (link existing user to Telegram)
                 if code.startswith("link_"):
                     r = await db.execute(
-                        text("SELECT id, agent_name, phone_number FROM user_profiles WHERE id::text IN (SELECT claimed_by FROM invite_links WHERE code=:c AND plan='link')"),
+                        text("SELECT id, agent_name, phone_number FROM user_profiles WHERE id::text IN (SELECT claimed_by FROM invite_links WHERE code=:c )"),
                         {"c": code},
                     )
                     u = r.fetchone()
@@ -76,7 +76,7 @@ async def telegram(request: Request):
                         return {"status": "ok"}
                     # Find the link code and the user
                     r = await db.execute(
-                        text("SELECT label FROM invite_links WHERE code=:c AND plan='link' AND claimed_by IS NULL"),
+                        text("SELECT label FROM invite_links WHERE code=:c  AND claimed_by IS NULL"),
                         {"c": code},
                     )
                     link = r.fetchone()
@@ -87,7 +87,7 @@ async def telegram(request: Request):
                     label = link[0] or ""
                     name = label.replace("TG link ", "") if "TG link" in label else "Agent"
                     r = await db.execute(
-                        text("SELECT id FROM user_profiles WHERE agent_name=:n AND id::text NOT IN (SELECT COALESCE(claimed_by,'') FROM invite_links WHERE plan='link' AND claimed_by IS NOT NULL) LIMIT 1"),
+                        text("SELECT id FROM user_profiles WHERE agent_name=:n AND id::text NOT IN (SELECT COALESCE(claimed_by,'') FROM invite_links claimed_by IS NOT NULL) LIMIT 1"),
                         {"n": name},
                     )
                     user = r.fetchone()
