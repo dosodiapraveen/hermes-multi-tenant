@@ -15,7 +15,7 @@ TIP_SET=$(( (10#$DAY) % 3 ))
 case $TIP_SET in
   0)
     TIP1="📝 *Save ideas*: Try \"Save this idea to my vault\" — I'll store it in your personal knowledge base."
-    TIP2="🌐 *Search the web*: Try \"Search for latest AI trends\" — I'll find and summarize."
+    TIP2="🌐 *Search the web*: Try \"Search for latest music trends\" — I'll find and summarize."
     ;;
   1)
     TIP1="📖 *Review notes*: Try \"What notes do I have?\" — I'll show everything in your vault."
