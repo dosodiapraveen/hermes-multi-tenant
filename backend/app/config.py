@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str = "hermes_verify"
     telegram_bot_token: Optional[str] = None
     resend_api_key: Optional[str] = None
-    google_api_key: Optional[str] = None
     brave_api_key: Optional[str] = None
     encryption_key: str = "0" * 64
     default_primary_model: str = "claude-sonnet-4-2026"

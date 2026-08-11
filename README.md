@@ -7,7 +7,6 @@ AI agent platform — each user gets an isolated Hermes agent with their own pro
 ```
 Caddy (HTTPS) → Frontend (Vue SPA) → API (FastAPI) → PostgreSQL
                  → Telegram Bot    →                → Redis
-                                                   → SearXNG (internal search)
 ```
 
 ## Quick Deploy
@@ -54,7 +53,6 @@ docker compose up -d --build
 | Caddy | 443 | Public (HTTPS) |
 | PostgreSQL | 5432 | Internal only |
 | Redis | 6379 | Internal only |
-| **SearXNG** | 8080 | **Internal only** (per-user search) |
 
 ## User Onboarding
 
@@ -91,7 +89,6 @@ docker compose restart api
 
 ## Security
 
-- **SearXNG** is internal only (not exposed publicly)
 - **Caddy** auto-renews TLS via Let's Encrypt
 - **JWT auth** with Supabase validation + dev fallback
 - **Rate limiting** via slowapi (30 req/min)
