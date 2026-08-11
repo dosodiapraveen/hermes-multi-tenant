@@ -79,7 +79,7 @@ async def telegram(request: Request):
                     return {"status": "ok"}
                 uid = str(link[0])
                 name = link[1] or "Agent"
-                await db.execute(text("UPDATE user_profiles SET phone_number=:c WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
+                await db.execute(text("UPDATE user_profiles SET phone_number=:c, platform='telegram' WHERE id::text=:uid"), {"c": chat_id, "uid": uid})
                 await db.execute(text("DELETE FROM invite_links WHERE code=:c"), {"c": code})
                 await db.commit()
                 try:
@@ -112,8 +112,8 @@ async def telegram(request: Request):
                 is_vip = inv[5]
                 trial_ends = datetime.utcnow() + timedelta(days=inv[4]) if inv[4] else None
                 r2 = await db.execute(
-                    text("""INSERT INTO user_profiles (phone_number, agent_name, plan, is_vip, trial_ends_at, primary_model, backup_model)
-                           VALUES (:p,:a,:pl,:v,:te,:m1,:m2) RETURNING id"""),
+                    text("""INSERT INTO user_profiles (phone_number, agent_name, plan, is_vip, trial_ends_at, primary_model, backup_model, platform)
+                           VALUES (:p,:a,:pl,:v,:te,:m1,:m2,'telegram') RETURNING id"""),
                     {"p": chat_id, "a": agent_name, "pl": plan, "v": is_vip, "te": trial_ends,
                      "m1": settings.default_primary_model, "m2": settings.default_backup_model},
                 )

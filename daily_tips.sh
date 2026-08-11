@@ -23,8 +23,7 @@ esac
 # Fetch active users with timezone info
 docker exec hermes-multi-tenant-postgres-1 psql -U hermes -t -A -F'|' \
   -c "SELECT phone_number, agent_name, COALESCE(timezone,'UTC')
-      FROM user_profiles WHERE is_active=true
-      AND phone_number ~ '^[0-9]+$' AND LENGTH(phone_number) >= 9;" 2>/dev/null |
+      FROM user_profiles WHERE is_active=true AND platform='telegram';" 2>/dev/null |
 while IFS='|' read -r chat_id name tz; do
   [ -z "$chat_id" ] || [ "$chat_id" = " " ] && continue
   

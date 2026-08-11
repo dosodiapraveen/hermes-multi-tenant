@@ -16,8 +16,7 @@ MSG="${MESSAGES[$IDX]}"
 docker exec hermes-multi-tenant-postgres-1 psql -U hermes -t -A -F'|' \
   -c "SELECT up.phone_number, up.agent_name, up.timezone
       FROM user_profiles up
-      WHERE up.is_active=true AND up.phone_number ~ '^[0-9]+$'
-      AND LENGTH(up.phone_number) >= 9
+      WHERE up.is_active=true AND up.platform='telegram'
       AND (
         SELECT MAX(al.created_at) FROM activity_logs al WHERE al.user_id::text = up.id::text
       ) < NOW() - INTERVAL '$DAYS_INACTIVE days'

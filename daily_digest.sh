@@ -5,8 +5,7 @@ BOT_TOKEN="8980557307:AAHzwXq8IyYYfqAhiquQ0FTNUxK79H7MofU"
 
 docker exec hermes-multi-tenant-postgres-1 psql -U hermes -t -A -F'|' \
   -c "SELECT phone_number, agent_name, COALESCE(timezone,'UTC'), id::text
-      FROM user_profiles WHERE is_active=true
-      AND phone_number ~ '^[0-9]+$' AND LENGTH(phone_number) >= 9;" 2>/dev/null |
+      FROM user_profiles WHERE is_active=true AND platform='telegram';" 2>/dev/null |
 while IFS='|' read -r chat_id name tz uid; do
   [ -z "$chat_id" ] || [ "$chat_id" = " " ] && continue
   
