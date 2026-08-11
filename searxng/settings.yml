@@ -1,0 +1,65 @@
+# SearXNG Configuration - Private instance for internal agent use
+# Only accessible from the internal Docker network
+
+use_default_settings: true
+
+general:
+  instance_name: "Hermes Search"
+  debug: false
+  privacypolicy_url: false
+  contact_url: false
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "searxng-f42aa08e815e5e37d57b0a54ad2d4e9dcc4809457b414fa98bacdda1d1bcf4ee"
+  bind_address: "0.0.0.0"
+  port: 8080
+  limiter: true
+  # Only allow internal network
+  # No public access
+  image_proxy: false
+  # Rate limiting
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+
+ui:
+  static_use_hash: true
+
+# Only enable these engines (faster, less noise)
+engines:
+  - name: google
+    shortcut: g
+    disabled: false
+
+  - name: duckduckgo
+    shortcut: ddg
+    disabled: false
+
+  - name: wikipedia
+    shortcut: wp
+    disabled: false
+
+  - name: bing
+    shortcut: bi
+    disabled: false
+
+  - name: news
+    shortcut: n
+    disabled: false
+
+outgoing:
+  request_timeout: 5.0
+  max_request_timeout: 10.0
+  useragent_suffix: ""
+  # Use Tor if available (uncomment if running tor)
+  # proxies:
+  #   all://:
+  #     socks5h: 127.0.0.1:9050

@@ -37,6 +37,23 @@ services:
     volumes:
       - /opt/hermes:/opt/hermes
 
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    expose: ["8080"]
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+      - searxng_data:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    depends_on: []
+
   frontend:
     build: ./frontend
     restart: unless-stopped
@@ -58,3 +75,4 @@ volumes:
   postgres_data:
   redis_data:
   caddy_data:
+  searxng_data:
