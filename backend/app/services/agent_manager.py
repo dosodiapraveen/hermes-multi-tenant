@@ -119,49 +119,55 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> tuple:
-    """Search via SearXNG and scrape the top result. Returns (search_results, page_content)."""
+    """Search via SearXNG and scrape top results. Returns (search_results, combined_page_content)."""
     import asyncio
     try:
         import httpx, re
         search_lines = []
-        page_content = ""
+        all_page_content = []
         async with httpx.AsyncClient(timeout=15) as c:
+            # Step 1: Search
             r = await c.get("http://searxng:8080/search", params={"q": query, "format": "json", "language": "en", "categories": "general", "pageno": 1})
             if r.status_code != 200:
                 raise Exception(f"SearXNG returned {r.status_code}")
             data = r.json()
             results = data.get("results", [])
+
+            # Step 2: Collect snippets
             for res in results[:num_results]:
                 title = res.get("title", "")
                 url = res.get("url", "")
                 snippet = res.get("content", "")[:200]
                 search_lines.append(f"- {title}\n  {snippet}\n  {url}")
 
-            # Scrape the top result for actual content (fast timeout, best-effort)
-            if results:
-                top_url = results[0].get("url", "")
-                if top_url:
-                    try:
-                        import re
-                        r2 = await c.get(top_url, follow_redirects=True, timeout=5,
-                            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
-                        text = r2.text
-                        # Remove scripts and styles
-                        text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
-                        text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-                        # Get all visible text
-                        text = re.sub(r"<[^>]+>", "\n", text)
-                        text = re.sub(r"\n\s*\n", "\n", text).strip()
-                        # Take first 2000 chars of meaningful content
-                        lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 20]
-                        page_content = "\n".join(lines[:80])[:2500]
-                    except:
-                        page_content = ""  # Scraping failed, use search snippets only
+            # Step 3: Scrape top 2-3 results for actual content
+            for res in results[:min(3, len(results))]:
+                url = res.get("url", "")
+                if not url:
+                    continue
+                try:
+                    r2 = await c.get(url, follow_redirects=True, timeout=6,
+                        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+                    text = r2.text
+                    # Strip scripts/styles
+                    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
+                    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
+                    text = re.sub(r"<[^>]+>", "\n", text)
+                    text = re.sub(r"\n\s*\n", "\n", text).strip()
+                    # Extract meaningful lines (>30 chars)
+                    lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
+                    if lines:
+                        all_page_content.append(f"--- {url} ---")
+                        all_page_content.extend(lines[:40])
+                except:
+                    continue  # Skip failed scrapes
 
         search_text = "\n\n".join(search_lines) if search_lines else "No results found."
-        if page_content:
-            search_text += f"\n\n--- Page content from {results[0].get('url','')} ---\n{page_content}"
-        return search_text, page_content
+        combined_content = "\n".join(all_page_content[:150]) if all_page_content else ""
+        if combined_content:
+            combined_content = combined_content[:3500]
+        return search_text, combined_content
+
     except Exception as e:
         # Fallback to Wikipedia
         try:
@@ -210,17 +216,21 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Search + scrape, return content directly (no model refusal to worry about)
+        # Search + scrape multiple results, feed to model for analysis
         results, page_content = await search_web(message, 5)
+        context = f"Search results for: {message}\n\n{results}"
         if page_content:
-            # Extract meaningful lines for a clean response
-            lines = [l.strip() for l in page_content.split("\n") if len(l.strip()) > 30]
-            clean = "\n".join(lines[:30])[:2000]
-            content = f"Here's what I found:\n\n{clean}\n\n---\nSource: SearXNG search"
-        else:
-            content = f"I found these resources:\n\n{results[:1200]}"
-        save_memory(uid, message, content)
-        return content
+            context += f"\n\n--- Page content ---\n{page_content[:2000]}"
+        context += "\n\nAnalyze the search results above. The SEARCH SNIPPETS and PAGE CONTENT contain the information. Look for specific data, names, numbers, and details in both. Provide a thorough answer with what you find. Include links."
+        search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
+        content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
+        if not content or len(content) < 20:
+            # Model returned empty - give it another chance with stronger instruction
+            retry = [{"role": "system", "content": "Give a comprehensive answer based on these search results. Include whatever data is available."}]
+            retry.append({"role": "user", "content": f"Search results:\n{results}\n\n{page_content}\n\nAnswer thoroughly with all available details."})
+            content, _ = await call_ai(model, retry, api_key, timeout)
+        save_memory(uid, message, content or "Search completed.")
+        return content or "Search completed."
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
