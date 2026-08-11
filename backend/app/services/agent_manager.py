@@ -125,6 +125,7 @@ async def search_web(query: str, num_results: int = 5) -> str:
         import requests
         def _search_news():
             """Search news via free RSS feeds."""
+            import re
             results = []
             base = "https://en.wikipedia.org/w/api.php"
             # Wikipedia search
