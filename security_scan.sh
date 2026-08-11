@@ -62,7 +62,22 @@ for f in /root/.ssh/authorized_keys /root/.ssh/id_*; do
   fi
 done
 
-# ── 4. Failed SSH attempts ──
+# ── 4. SSH configuration ──
+echo "" >> $REPORT
+echo "── SSH configuration ──" >> $REPORT
+if grep -q "^PasswordAuthentication no" /etc/ssh/sshd_config 2>/dev/null; then
+  echo "  ✅ Password authentication: disabled" >> $REPORT
+else
+  echo "  ⚠️  Password authentication: enabled (should be disabled)" >> $REPORT
+  ISSUES=$((ISSUES+1))
+fi
+if grep -q "^PermitRootLogin prohibit-password\|^PermitRootLogin without-password" /etc/ssh/sshd_config 2>/dev/null; then
+  echo "  ✅ Root login: keys only" >> $REPORT
+else
+  echo "  ⚠️  Root login: check configuration" >> $REPORT
+fi
+
+# Failed SSH attempts
 echo "" >> $REPORT
 echo "── Failed SSH attempts (last 24h) ──" >> $REPORT
 attempts=$(grep "Failed password" /var/log/auth.log 2>/dev/null | grep "$(date +'%b %d')" | wc -l)
@@ -84,6 +99,27 @@ if command -v trivy &>/dev/null; then
   trivy image --severity HIGH,CRITICAL --no-progress hermes-multi-tenant-api:latest 2>/dev/null | tail -5 >> $REPORT
 else
   echo "  ℹ️  Install trivy for image vulnerability scanning" >> $REPORT
+fi
+
+# ── 7. API auth check ──
+echo "" >> $REPORT
+echo "── API auth check ──" >> $REPORT
+admin_check=$(curl -s -o /dev/null -w "%{http_code}" https://beprepared.dev/api/admin/users 2>/dev/null || echo "fail")
+if [ "$admin_check" = "401" ] || [ "$admin_check" = "403" ]; then
+  echo "  ✅ Admin endpoints require auth (returned $admin_check)" >> $REPORT
+else
+  echo "  ⚠️  Admin endpoints accessible without auth (returned $admin_check)" >> $REPORT
+  ISSUES=$((ISSUES+1))
+fi
+
+# ── 8. TLS certificate expiry ──
+echo "" >> $REPORT
+echo "── TLS certificate ──" >> $REPORT
+expiry=$(echo | openssl s_client -servername beprepared.dev -connect beprepared.dev:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+if [ -n "$expiry" ]; then
+  echo "  ℹ️  Cert expires: $expiry" >> $REPORT
+else
+  echo "  ⚠️  Could not check TLS cert" >> $REPORT
 fi
 
 # ── Summary ──
