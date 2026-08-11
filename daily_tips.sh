@@ -4,7 +4,7 @@ BOT_TOKEN="8980557307:AAHzwXq8IyYYfqAhiquQ0FTNUxK79H7MofU"
 
 # Get active users from DB via docker
 USERS=$(docker exec hermes-multi-tenant-postgres-1 psql -U hermes -t -A -F',' \
-  -c "SELECT phone_number, agent_name FROM user_profiles WHERE is_active=true AND phone_number ~ '^[0-9]+$';" 2>/dev/null)
+  -c "SELECT phone_number, agent_name FROM user_profiles WHERE is_active=true AND phone_number SIMILAR TO '[0-9]+' AND LENGTH(phone_number) >= 9 AND phone_number NOT LIKE '880%' AND phone_number NOT LIKE '688%';" 2>/dev/null)
 
 if [ -z "$USERS" ]; then echo "No users"; exit 0; fi
 
