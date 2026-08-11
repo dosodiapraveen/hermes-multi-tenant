@@ -221,13 +221,12 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
         context = f"Search results for: {message}\n\n{results}"
         if page_content:
             context += f"\n\n--- Page content ---\n{page_content[:2000]}"
-        context += "\n\nAnalyze the search results above. The SEARCH SNIPPETS and PAGE CONTENT contain the information. Look for specific data, names, numbers, and details in both. Provide a thorough answer with what you find. Include links."
+        context += "\n\nUse this information to answer the user's question directly and naturally. Do not say 'based on the search results' or 'according to the snippets'. Just give the answer like you already know it. Include specific data and links naturally."
         search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
         content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
         if not content or len(content) < 20:
-            # Model returned empty - give it another chance with stronger instruction
-            retry = [{"role": "system", "content": "Give a comprehensive answer based on these search results. Include whatever data is available."}]
-            retry.append({"role": "user", "content": f"Search results:\n{results}\n\n{page_content}\n\nAnswer thoroughly with all available details."})
+            retry = [{"role": "system", "content": "Answer the user's question using the information below. Answer directly without mentioning search results."}]
+            retry.append({"role": "user", "content": f"Information:\n{results}\n\n{page_content}\n\nQuestion: {message}"})
             content, _ = await call_ai(model, retry, api_key, timeout)
         save_memory(uid, message, content or "Search completed.")
         return content or "Search completed."
