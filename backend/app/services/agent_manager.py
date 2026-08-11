@@ -118,30 +118,50 @@ def write_note(uid: str, title: str, content: str) -> str:
     return f"Saved to {path.name}"
 
 
-async def search_web(query: str, num_results: int = 5) -> str:
-    """Search using self-hosted SearXNG (private, no rate limits)."""
+async def search_web(query: str, num_results: int = 5) -> tuple:
+    """Search via SearXNG and scrape the top result. Returns (search_results, page_content)."""
     import asyncio
     try:
-        import httpx
+        import httpx, re
+        search_lines = []
+        page_content = ""
         async with httpx.AsyncClient(timeout=15) as c:
             r = await c.get("http://searxng:8080/search", params={"q": query, "format": "json", "language": "en", "categories": "general", "pageno": 1})
             if r.status_code != 200:
                 raise Exception(f"SearXNG returned {r.status_code}")
             data = r.json()
             results = data.get("results", [])
-            if not results:
-                return "No results found."
-            lines = []
             for res in results[:num_results]:
                 title = res.get("title", "")
                 url = res.get("url", "")
                 snippet = res.get("content", "")[:200]
-                lines.append(f"- {title}\n  {snippet}\n  {url}")
-            return "\n\n".join(lines)
+                search_lines.append(f"- {title}\n  {snippet}\n  {url}")
+
+            # Scrape the top result for actual content
+            if results:
+                top_url = results[0].get("url", "")
+                if top_url:
+                    try:
+                        r2 = await c.get(top_url, follow_redirects=True, timeout=10,
+                            headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
+                        # Extract text content
+                        text = re.sub(r"<script[^>]*>.*?</script>", "", r2.text, flags=re.DOTALL)
+                        text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
+                        text = re.sub(r"<[^>]+>", " ", text)
+                        text = re.sub(r"\s+", " ", text).strip()
+                        # Find the main content area (skip headers/footers)
+                        page_content = text[:3000]
+                    except:
+                        page_content = ""
+
+        search_text = "\n\n".join(search_lines) if search_lines else "No results found."
+        if page_content:
+            search_text += f"\n\n--- Page content from {results[0].get('url','')} ---\n{page_content}"
+        return search_text, page_content
     except Exception as e:
         # Fallback to Wikipedia
         try:
-            import requests, re
+            import requests
             headers = {"User-Agent": "HermesAgent/1.0 (hermes@beprepared.dev)"}
             r = requests.get("https://en.wikipedia.org/w/api.php", params={
                 "action": "query", "list": "search", "srsearch": query,
@@ -153,9 +173,10 @@ async def search_web(query: str, num_results: int = 5) -> str:
                 snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))[:200]
                 url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
                 results.append(f"- {title}\n  {snippet}\n  {url}")
-            return "\n\n".join(results) if results else "No results found."
+            text = "\n\n".join(results) if results else "No results found."
+            return text, ""
         except:
-            return f"Search failed. Please try again."
+            return "Search failed. Please try again.", ""
 
 async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
@@ -186,9 +207,12 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
 
     if should_search:
         # Run search, feed results to model for analysis
-        results = await search_web(message, 5)
-        # Add results as conversation context for the model to analyze
-        search_context = {"role": "system", "content": f"Search results for query '{message}':\n\n{results}\n\nAnalyze these results and provide a thorough, well-organized answer. Include relevant details from the snippets and links for further reading."}
+        results, page_content = await search_web(message, 5)
+        context = f"Search results for query '{message}':\n{results}"
+        if page_content:
+            context += f"\n\n--- Extracted page content ---\n{page_content}"
+        context += "\n\nAnalyze these results and provide a thorough answer with actual data from the page content."
+        search_context = {"role": "system", "content": context}
         messages.insert(1, search_context)  # After main system prompt
         content, tool_calls = await call_ai(model, messages, api_key, timeout)
         save_memory(uid, message, content or "Search completed.")
@@ -211,7 +235,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                     elif name == "read_vault":
                         result = read_vault(uid) or "Vault is empty"
                     elif name == "web_search":
-                        result = await search_web(args.get("query", ""))
+                        result, _ = await search_web(args.get("query", ""))
                     else:
                         result = "Done."
                 except Exception as e:
