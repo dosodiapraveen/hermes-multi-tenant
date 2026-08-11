@@ -119,74 +119,66 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> tuple:
-    """Search via SearXNG and scrape top results. Returns (search_results, combined_page_content)."""
+    """Search using Gemini + Google Search grounding. Returns (answer_with_citations, raw_results)."""
+    import asyncio, os, json
+    api_key = os.environ.get("GOOGLE_API_KEY", "")
+    if not api_key:
+        # Fallback to Wikipedia
+        return await _search_fallback(query, num_results)
+    try:
+        import httpx
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+        body = {
+            "contents": [{"parts": [{"text": f"Search for: {query}. Provide a thorough answer with specific data, names, numbers, and cite your sources with links."}]}],
+            "tools": [{"google_search": {}}]
+        }
+        async with httpx.AsyncClient(timeout=20) as c:
+            r = await c.post(url, json=body)
+            if r.status_code != 200:
+                raise Exception(f"Gemini returned {r.status_code}")
+            data = r.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            # Extract grounding/source info
+            sources = ""
+            grounding = data.get("candidates", [{}])[0].get("grounding_metadata", {})
+            if grounding:
+                chunks = grounding.get("grounding_chunks", [])
+                if chunks:
+                    source_lines = []
+                    for i, chunk in enumerate(chunks[:5]):
+                        src = chunk.get("web", {})
+                        title = src.get("title", "")
+                        url = src.get("uri", "")
+                        if title and url:
+                            source_lines.append(f"{i+1}. {title} - {url}")
+                    if source_lines:
+                        sources = "\n".join(source_lines)
+            return text, sources
+    except Exception as e:
+        return await _search_fallback(query, num_results)
+
+async def _search_fallback(query: str, num_results: int = 5) -> tuple:
+    """Fallback search using Wikipedia when Gemini is unavailable."""
     import asyncio
     try:
-        import httpx, re
-        search_lines = []
-        all_page_content = []
-        async with httpx.AsyncClient(timeout=15) as c:
-            # Step 1: Search
-            r = await c.get("http://searxng:8080/search", params={"q": query, "format": "json", "language": "en", "categories": "general", "pageno": 1})
-            if r.status_code != 200:
-                raise Exception(f"SearXNG returned {r.status_code}")
-            data = r.json()
-            results = data.get("results", [])
-
-            # Step 2: Collect snippets
-            for res in results[:num_results]:
-                title = res.get("title", "")
-                url = res.get("url", "")
-                snippet = res.get("content", "")[:200]
-                search_lines.append(f"- {title}\n  {snippet}\n  {url}")
-
-            # Step 3: Scrape top 2-3 results for actual content
-            for res in results[:min(3, len(results))]:
-                url = res.get("url", "")
-                if not url:
-                    continue
-                try:
-                    r2 = await c.get(url, follow_redirects=True, timeout=6,
-                        headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"})
-                    text = r2.text
-                    # Strip scripts/styles
-                    text = re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.DOTALL)
-                    text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL)
-                    text = re.sub(r"<[^>]+>", "\n", text)
-                    text = re.sub(r"\n\s*\n", "\n", text).strip()
-                    # Extract meaningful lines (>30 chars)
-                    lines = [l.strip() for l in text.split("\n") if len(l.strip()) > 30]
-                    if lines:
-                        all_page_content.append(f"--- {url} ---")
-                        all_page_content.extend(lines[:40])
-                except:
-                    continue  # Skip failed scrapes
-
-        search_text = "\n\n".join(search_lines) if search_lines else "No results found."
-        combined_content = "\n".join(all_page_content[:150]) if all_page_content else ""
-        if combined_content:
-            combined_content = combined_content[:3500]
-        return search_text, combined_content
-
-    except Exception as e:
-        # Fallback to Wikipedia
-        try:
-            import requests
-            headers = {"User-Agent": "HermesAgent/1.0 (hermes@beprepared.dev)"}
-            r = requests.get("https://en.wikipedia.org/w/api.php", params={
-                "action": "query", "list": "search", "srsearch": query,
-                "format": "json", "srlimit": num_results
-            }, headers=headers, timeout=8)
-            results = []
-            for item in r.json().get("query", {}).get("search", []):
-                title = item.get("title", "")
-                snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))[:200]
-                url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
-                results.append(f"- {title}\n  {snippet}\n  {url}")
-            text = "\n\n".join(results) if results else "No results found."
-            return text, ""
-        except:
-            return "Search failed. Please try again.", ""
+        import requests
+        headers = {"User-Agent": "HermesAgent/1.0 (hermes@beprepared.dev)"}
+        r = requests.get("https://en.wikipedia.org/w/api.php", params={
+            "action": "query", "list": "search", "srsearch": query,
+            "format": "json", "srlimit": num_results
+        }, headers=headers, timeout=8)
+        results = []
+        for item in r.json().get("query", {}).get("search", []):
+            title = item.get("title", "")
+            snippet = requests.utils.unquote(item.get("snippet", "").replace("&amp;", "&"))
+            import re
+            snippet = re.sub(r"<[^>]+>", "", snippet)[:200]
+            url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
+            results.append(f"- {title}\n  {snippet}\n  {url}")
+        text = "\n\n".join(results) if results else "No results found."
+        return text, ""
+    except:
+        return "Search unavailable. Please try again.", ""
 
 async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
@@ -218,20 +210,12 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     should_search = any(t in msg_lower for t in search_triggers)
 
     if should_search:
-        # Search + scrape multiple results, feed to model for analysis
-        results, page_content = await search_web(message, 5)
-        context = f"Search results for: {message}\n\n{results}"
-        if page_content:
-            context += f"\n\n--- Page content ---\n{page_content[:2000]}"
-        context += "\n\nUse this information to answer the user's question directly and naturally. Do not say 'based on the search results' or 'according to the snippets'. Just give the answer like you already know it. Include specific data and links naturally."
-        search_messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
-        content, tool_calls = await call_ai(model, search_messages, api_key, timeout)
-        if not content or len(content) < 20:
-            retry = [{"role": "system", "content": "Answer the user's question using the information below. Answer directly without mentioning search results."}]
-            retry.append({"role": "user", "content": f"Information:\n{results}\n\n{page_content}\n\nQuestion: {message}"})
-            content, _ = await call_ai(model, retry, api_key, timeout)
-        save_memory(uid, message, content or "Search completed.")
-        return content or "Search completed."
+        # Gemini handled search + analysis in one call
+        content, sources = await search_web(message, 5)
+        if sources:
+            content += f"\n\n📚 Sources:\n{sources}"
+        save_memory(uid, message, content)
+        return content
     else:
         # Normal flow - let model decide if it needs tools
         content, tool_calls = await call_ai(model, messages, api_key, timeout, tools=TOOLS)
