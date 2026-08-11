@@ -198,6 +198,19 @@ async def test_email(body: dict = Body(...)):
     await send_welcome_email(email, "Test User", "pro")
     return {"status": "sent", "email": email}
 
+@router.post("/users/{user_id}/telegram-link")
+async def create_telegram_link(user_id: str, db: AsyncSession = Depends(get_db)):
+    import secrets
+    r = await db.execute(text("SELECT id, agent_name FROM user_profiles WHERE id::text=:uid OR phone_number=:uid"), {"uid": user_id})
+    u = r.fetchone()
+    if not u: raise HTTPException(404, "User not found")
+    uid, name = str(u[0]), u[1] or "Agent"
+    code = "link_" + secrets.token_urlsafe(16)
+    await db.execute(text("INSERT INTO invite_links (code, label, agent_name, plan) VALUES (:c, :l, :a, 'link')"),
+        {"c": code, "l": f"TG link {name}", "a": name})
+    await db.commit()
+    return {"code": code, "link_url": f"https://t.me/BotBePreparedBot?start={code}"}
+
 # ═══════════════════════════════════════════
 # Invite Links
 # ═══════════════════════════════════════════
