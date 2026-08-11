@@ -187,7 +187,9 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     if should_search:
         # Run search first, then let model respond with results
         results = await search_web(message, 5)
-        messages.append({"role": "assistant", "content": f"I'll search for: {message}"})
+        import json
+        tc = {"id": "auto_search", "type": "function", "function": {"name": "web_search", "arguments": json.dumps({"query": message})}}
+        messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
         messages.append({"role": "tool", "tool_call_id": "auto_search", "content": results})
         content, tool_calls = await call_ai(model, messages, api_key, timeout)
     else:
