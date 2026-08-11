@@ -170,7 +170,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
 
     system = f"You are {agent_name}, a helpful AI assistant. You can search the web, read and save notes to the user's personal vault."
     system += f"\nCurrent vault notes:\n{vault}" if vault else ""
-    system += "\nWhen you need current information, use the web_search tool."
+    system += "\nIMPORTANT: When the user asks you to look something up, find information, or search, you MUST use the web_search tool. Do not just say you will search — actually call the tool and provide the results."
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
