@@ -119,42 +119,30 @@ def write_note(uid: str, title: str, content: str) -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> str:
-    """Search the web using multiple free sources (Wikipedia + news)."""
+    """Search the web using DuckDuckGo Lite (free, no API key needed)."""
     import asyncio
     try:
-        import requests
-        def _search_news():
-            """Search news via free RSS feeds."""
-            import re
-            results = []
-            base = "https://en.wikipedia.org/w/api.php"
-            # Wikipedia search
-            try:
-                headers = {"User-Agent": "HermesAgent/1.0 (hermes@beprepared.dev)"}
-                r = requests.get(base, params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": num_results}, headers=headers, timeout=8)
-                for item in r.json().get("query", {}).get("search", []):
-                    title = item.get("title", "")
-                    snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))[:150]
-                    url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
-                    results.append(f"- {title}\n  {snippet}\n  {url}")
-            except:
-                pass
-            # News from newsapi.org fallback - try Google News RSS
-            try:
-                r = requests.get("https://news.google.com/rss/search", params={"q": query, "hl": "en-US", "gl": "US"}, headers={"User-Agent": "Mozilla/5.0"}, timeout=8)
-                import xml.etree.ElementTree as ET
-                root = ET.fromstring(r.content)
-                for item in root.findall(".//item")[:num_results]:
-                    title = item.findtext("title", "")
-                    link = item.findtext("link", "")
-                    if title and len(results) < num_results * 2:
-                        results.append(f"- {title}\n  {link}")
-            except:
-                pass
-            return "\n\n".join(results[:num_results * 2]) if results else ""
-        import re
-        result = await asyncio.to_thread(_search_news)
-        return result if result else "I could not find current information on that topic. Try asking in a different way."
+        import primp, re
+        def _search():
+            client = primp.Client(impersonate="chrome_120", timeout=10)
+            r = client.get("https://lite.duckduckgo.com/lite/", params={"q": query})
+            results, seen = [], set()
+            # Extract result titles and snippets
+            for m in re.finditer(r'class="result-snippet"[^>]*>.*?<a[^>]*>(.*?)</a>', r.text, re.DOTALL):
+                title = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+                title = title.replace("&quot;", "\"").replace("&#x27;", "'").replace("&amp;", "&")
+                if title and title not in seen and len(results) < num_results:
+                    seen.add(title)
+                    results.append(f"- {title}")
+            # Fallback: extract any bold/highlighted text
+            if not results:
+                for m in re.finditer(r"<b>(.*?)</b>", r.text):
+                    t = m.group(1).strip()
+                    if len(t) > 15 and t not in seen and len(results) < num_results:
+                        seen.add(t)
+                        results.append(f"- {t}")
+            return "\n\n".join(results) if results else "No results found. Try a different search."
+        return await asyncio.to_thread(_search)
     except Exception as e:
         return f"Search failed: {e}"
 
