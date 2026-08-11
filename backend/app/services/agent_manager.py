@@ -211,7 +211,9 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     # Auto-trigger web_search for search-like queries (model often refuses)
     search_triggers = ["search", "look up", "lookup", "find", "what is", "who is",
                        "top ", "latest", "news about", "weather", "how to",
-                       "tell me about", "show me"]
+                       "tell me about", "show me", "how is", "what are",
+                       "landscape", "overview", "current state", "market",
+                       "trends in", "analysis of", "status of"]
     msg_lower = message.lower()
     should_search = any(t in msg_lower for t in search_triggers)
 
