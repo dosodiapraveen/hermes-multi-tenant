@@ -130,7 +130,8 @@ async def search_web(query: str, num_results: int = 5) -> str:
             base = "https://en.wikipedia.org/w/api.php"
             # Wikipedia search
             try:
-                r = requests.get(base, params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": num_results}, timeout=8)
+                headers = {"User-Agent": "HermesAgent/1.0 (hermes@beprepared.dev)"}
+                r = requests.get(base, params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": num_results}, headers=headers, timeout=8)
                 for item in r.json().get("query", {}).get("search", []):
                     title = item.get("title", "")
                     snippet = re.sub(r"<[^>]+>", "", item.get("snippet", ""))[:150]
