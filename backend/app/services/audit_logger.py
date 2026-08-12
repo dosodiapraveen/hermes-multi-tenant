@@ -8,7 +8,7 @@ and administrative actions with database persistence.
 from typing import Optional, Dict, Any
 from datetime import datetime
 from app.logging_config import get_logger
-from app.database import get_db_pool
+from app.database import async_session_factory
 
 logger = get_logger(__name__)
 
@@ -117,7 +117,7 @@ class AuditLogger:
 
         # Persist to database for long-term audit trail
         try:
-            pool = get_db_pool()
+            pool = async_session_factory()
             async with pool.acquire() as conn:
                 await conn.execute(
                     """
