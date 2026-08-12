@@ -23,13 +23,15 @@ async def send_email(to: str, subject: str, html: str):
     key = settings.resend_api_key
     if not key:
         print(f"EMAIL NOT SENT (no key): {subject} to {to}")
-        return
+        raise Exception("No API key")
     async with httpx.AsyncClient() as c:
-        await c.post(
+        r = await c.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={"from": "Hermes <noreply@beprepared.dev>", "to": to, "subject": subject, "html": html},
         )
+        if r.status_code != 200:
+            raise Exception(f"Resend: {r.status_code} {r.text[:100]}")
 
 @router.post("/register")
 async def register(body: dict):
