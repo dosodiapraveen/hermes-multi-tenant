@@ -14,3 +14,4 @@ requests==2.34.2
 
 SpeechRecognition==3.17.0
 pydub==0.25.1
+bcrypt==5.0.0

@@ -11,19 +11,20 @@ router = APIRouter(prefix="/api/me", tags=["portal"])
 OBSIDIAN_ROOT = Path("/opt/hermes/obsidian")
 
 async def resolve_user(request: Request) -> dict:
-    """Extract user from X-Access-Token header (Telegram chat_id or generated token)."""
-    token = request.headers.get("X-Access-Token", "")
+    """Extract user from Bearer token (from user_accounts login)."""
+    auth = request.headers.get("Authorization", "")
+    token = auth.replace("Bearer ", "").strip()
     if not token:
-        raise HTTPException(401, "Missing access token")
+        raise HTTPException(401, "Missing auth token")
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, agent_name, phone_number FROM user_profiles WHERE phone_number=:t OR id::text=:t"),
+            text("SELECT ua.user_profile_id, up.agent_name FROM user_accounts ua JOIN user_profiles up ON up.id=ua.user_profile_id WHERE ua.verification_token=:t AND ua.email_verified=true"),
             {"t": token},
         )
         u = r.fetchone()
         if not u:
-            raise HTTPException(401, "Invalid token")
-        return {"id": str(u[0]), "name": u[1], "phone": u[2]}
+            raise HTTPException(401, "Invalid or expired token")
+        return {"id": str(u[0]), "name": u[1]}
 
 
 @router.get("/notes")

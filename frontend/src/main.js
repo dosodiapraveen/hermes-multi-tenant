@@ -9,6 +9,11 @@ import Invites from './views/Invites.vue'
 import Join from './views/Join.vue'
 import Usage from './views/Usage.vue'
 import UserPortal from './views/UserPortal.vue'
+import UserRegister from './views/UserRegister.vue'
+import UserLogin from './views/UserLogin.vue'
+import UserForgot from './views/UserForgot.vue'
+import UserReset from './views/UserReset.vue'
+import UserVerify from './views/UserVerify.vue'
 import Settings from './views/Settings.vue'
 
 const routes = [
@@ -20,6 +25,11 @@ const routes = [
   { path: '/invites', name: 'Invites', component: Invites, meta: { requiresAuth: true } },
   { path: '/usage', name: 'Usage', component: Usage, meta: { requiresAuth: true } },
   { path: '/portal', name: 'UserPortal', component: UserPortal, meta: { public: true } },
+  { path: '/portal-register', name: 'UserRegister', component: UserRegister, meta: { public: true } },
+  { path: '/portal-login', name: 'UserLogin', component: UserLogin, meta: { public: true } },
+  { path: '/forgot-password', name: 'UserForgot', component: UserForgot, meta: { public: true } },
+  { path: '/reset-password', name: 'UserReset', component: UserReset, meta: { public: true } },
+  { path: '/verify-email', name: 'UserVerify', component: UserVerify, meta: { public: true } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAuth: true } },
 ]
 
@@ -29,8 +39,6 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
     next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/dashboard')
   } else {
     next()
   }
