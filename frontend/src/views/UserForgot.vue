@@ -4,7 +4,7 @@
     <input v-model="email" placeholder="Email" type="email" />
     <button @click="forgot">Send Reset Link</button>
     <p v-if="msg">{{ msg }}</p>
-    <p><a href="/portal-login">Back to login</a></p>
+    <p><a href="/user/login">Back to login</a></p>
   </div>
 </template>
 <script>

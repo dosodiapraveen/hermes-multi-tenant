@@ -8,7 +8,7 @@
     <p class="hint">Your agent ID is shared by your admin.</p>
     <button @click="register">Register</button>
     <p v-if="msg">{{ msg }}</p>
-    <p>Already have an account? <a href="/portal-login">Login</a></p>
+    <p>Already have an account? <a href="/user/login">Login</a></p>
   </div>
 </template>
 <script>

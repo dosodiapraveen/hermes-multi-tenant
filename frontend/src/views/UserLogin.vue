@@ -5,8 +5,8 @@
     <input v-model="password" placeholder="Password" type="password" />
     <button @click="login">Login</button>
     <p v-if="msg">{{ msg }}</p>
-    <p><a href="/forgot-password">Forgot password?</a></p>
-    <p>No account? <a href="/portal-register">Register</a></p>
+    <p><a href="/user/forgot">Forgot password?</a></p>
+    <p>No account? <a href="/user/register">Register</a></p>
   </div>
 </template>
 <script>

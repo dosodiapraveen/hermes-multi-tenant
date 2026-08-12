@@ -1,7 +1,7 @@
 <template>
   <div class="auth-page">
     <h1>{{ msg }}</h1>
-    <p v-if="success"><a href="/portal-login">Login now</a></p>
+    <p v-if="success"><a href="/user/login">Login now</a></p>
   </div>
 </template>
 <script>

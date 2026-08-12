@@ -52,7 +52,7 @@ async def register(body: dict):
             {"p": profile_id, "e": email, "h": pw_hash, "t": vtoken, "ex": expires},
         )
         await db.commit()
-    link = f"{FRONTEND_URL}/verify-email?token={vtoken}"
+    link = f"{FRONTEND_URL}/user/verify?token={vtoken}"
     html = f"""<h2>Welcome!</h2><p>Verify your email by clicking the link below:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
     await send_email(email, "Verify your email", html)
     return {"status": "registered", "message": "Verification email sent"}
@@ -108,7 +108,7 @@ async def forgot_password(body: dict):
         expires = datetime.utcnow() + timedelta(hours=1)
         await db.execute(text("UPDATE user_accounts SET reset_token=:t, reset_expires=:ex WHERE id=:id"), {"t": rtoken, "ex": expires, "id": u[0]})
         await db.commit()
-    link = f"{FRONTEND_URL}/reset-password?token={rtoken}"
+    link = f"{FRONTEND_URL}/user/reset?token={rtoken}"
     html = f"""<h2>Reset your password</h2><p>Click the link to set a new password:</p><a href="{link}">Reset Password</a><p>Link expires in 1 hour.</p><p>If you didn't request this, ignore this email.</p>"""
     await send_email(email, "Reset your password", html)
     return {"status": "sent"}

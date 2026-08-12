@@ -4,7 +4,7 @@
     <input v-model="password" placeholder="New password (min 6 chars)" type="password" />
     <button @click="reset">Reset Password</button>
     <p v-if="msg">{{ msg }}</p>
-    <p v-if="success"><a href="/portal-login">Login now</a></p>
+    <p v-if="success"><a href="/user/login">Login now</a></p>
   </div>
 </template>
 <script>

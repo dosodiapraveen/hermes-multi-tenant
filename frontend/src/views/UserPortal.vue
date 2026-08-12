@@ -149,11 +149,11 @@ export default {
       catch(e) { return d.slice(0,10) }
     },
     async fetchData() {
-      if (!this.token) { window.location='/portal-login'; return }
+      if (!this.token) { window.location='/user/login'; return }
       for (const ep of ['notes','reminders','projects','activity']) {
         try {
           const r=await fetch('/api/me/'+ep,{headers:{'Authorization':'Bearer '+this.token}})
-          if (r.status===401) { localStorage.removeItem('portal_token'); window.location='/portal-login'; return }
+          if (r.status===401) { localStorage.removeItem('portal_token'); window.location='/user/login'; return }
           const d=await r.json()
           if (ep==='notes') { this.notes=d.notes||[]; this.user=d.user||this.user }
           if (ep==='reminders') this.reminders=d.reminders||[]
@@ -162,7 +162,7 @@ export default {
         }catch(e){}
       }
     },
-    logout() { localStorage.removeItem('portal_token'); localStorage.removeItem('profile_id'); window.location='/portal-login' },
+    logout() { localStorage.removeItem('portal_token'); localStorage.removeItem('profile_id'); window.location='/user/login' },
     toggleReminder(r) {},
     updateStatus(p,v) { p.status=v },
   },
