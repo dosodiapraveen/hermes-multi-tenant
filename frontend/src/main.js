@@ -24,6 +24,7 @@ const routes = [
   { path: '/users', name: 'Users', component: Users, meta: { requiresAuth: true } },
   { path: '/invites', name: 'Invites', component: Invites, meta: { requiresAuth: true } },
   { path: '/usage', name: 'Usage', component: Usage, meta: { requiresAuth: true } },
+  { path: '/user', redirect: '/user/dashboard' },
   { path: '/user/dashboard', name: 'UserPortal', component: UserPortal, meta: { public: true } },
   { path: '/user/register', name: 'UserRegister', component: UserRegister, meta: { public: true } },
   { path: '/user/login', name: 'UserLogin', component: UserLogin, meta: { public: true } },
