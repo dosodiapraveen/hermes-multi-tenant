@@ -101,6 +101,44 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_dashboard_note",
+            "description": "Save a note to the user's dashboard and vault. Use this when the user says 'save a note' or 'add a note'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Note title"},
+                    "content": {"type": "string", "description": "Note content"},
+                    "category": {"type": "string", "description": "Category like General, Work, Personal (optional)"},
+                },
+                "required": ["title", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_dashboard_notes",
+            "description": "Show all notes from the user's dashboard.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_project_detail",
+            "description": "Get details and research for a specific project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "The project ID from list_projects"},
+                },
+                "required": ["project_id"],
+            },
+        },
+    },
 ]
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
@@ -242,6 +280,45 @@ async def list_projects(uid: str) -> str:
         return "\n".join(f"{emojis.get(row[1], '•')} {row[0]} ({row[1]})" for row in rows)
 
 
+
+
+async def create_dashboard_note(uid: str, title: str, content: str, category: str = "General") -> str:
+    """Create a note in the user's dashboard DB and sync to vault."""
+    from app.database import async_session_factory
+    from sqlalchemy import text as sqltext
+    from pathlib import Path
+    from datetime import datetime
+    async with async_session_factory() as db:
+        r = await db.execute(
+            sqltext("INSERT INTO notes (user_id, title, content, category) VALUES (:u, :t, :c, :cat) RETURNING id"),
+            {"u": uid, "t": title, "c": content, "cat": category},
+        )
+        await db.commit()
+        nid = r.fetchone()[0]
+    # Sync to vault
+    try:
+        inbox = Path("/opt/hermes/obsidian") / uid / "Inbox"
+        inbox.mkdir(parents=True, exist_ok=True)
+        path = inbox / f"{title.replace(chr(32), chr(45))[:50].lower()}.md"
+        path.write_text(f"# {title}\n\n{content}\n\n---\nFrom dashboard")
+    except Exception:
+        pass
+    return f"Note saved: {title} (in {category})"
+
+
+async def list_dashboard_notes(uid: str) -> str:
+    from app.database import async_session_factory
+    from sqlalchemy import text as sqltext
+    async with async_session_factory() as db:
+        r = await db.execute(
+            sqltext("SELECT title, category, updated_at FROM notes WHERE user_id::text=:u ORDER BY updated_at DESC LIMIT 10"),
+            {"u": uid},
+        )
+        rows = r.fetchall()
+        if not rows:
+            return "No dashboard notes."
+        return "\n".join(f"📝 {row[0]} ({row[1]}) - {str(row[2])[:10]}" for row in rows)
+
 async def search_web(query: str, num_results: int = 5) -> tuple:
     """Search using Brave Search API. Returns (formatted_results, sources_list)."""
     import asyncio, os
@@ -369,6 +446,23 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                         result = await create_project(uid, args.get("title", ""), args.get("description", ""))
                     elif name == "list_projects":
                         result = await list_projects(uid)
+
+                    elif name == "create_dashboard_note":
+                        result = await create_dashboard_note(uid, args.get("title", ""), args.get("content", ""), args.get("category", "General"))
+                    elif name == "list_dashboard_notes":
+                        result = await list_dashboard_notes(uid)
+                    elif name == "get_project_detail":
+                        pid = args.get("project_id", "")
+                        from app.database import async_session_factory
+                        from sqlalchemy import text as sqltext
+                        async with async_session_factory() as db:
+                            r = await db.execute(sqltext("SELECT title, description, status, updated_at FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": pid, "u": uid})
+                            p = r.fetchone()
+                            if not p: result = "Project not found"
+                            else:
+                                rr = await db.execute(sqltext("SELECT title, content FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC"), {"p": pid})
+                                research = "\n".join(f"📄 {row[0]}: {row[1][:200]}" for row in rr.fetchall()) or "No research"
+                                result = f"📋 {p[0]}\n{p[1]}\nStatus: {p[2]}\nUpdated: {str(p[3])[:10]}\n\nResearch:\n{research}"
                     else:
                         result = "Done."
                 except Exception as e:
