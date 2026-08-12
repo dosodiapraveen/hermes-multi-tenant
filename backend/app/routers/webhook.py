@@ -1,5 +1,5 @@
 """Webhook handlers for Telegram and WhatsApp."""
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from sqlalchemy import text
 from app.config import settings
 from app.database import async_session_factory
@@ -8,6 +8,10 @@ from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
+from app.logging_config import get_logger
+from app.services.audit_logger import audit_logger, AuditLogger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -46,6 +50,25 @@ async def send_tg(chat_id: str, text: str):
 
 @router.post("/telegram")
 async def telegram(request: Request):
+    # Get client info for audit logging
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
+                (request.client.host if request.client else "unknown")
+    request_id = getattr(request.state, "request_id", None)
+
+    # Verify webhook secret if configured
+    if settings.telegram_webhook_secret:
+        secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if secret_header != settings.telegram_webhook_secret:
+            await audit_logger.log_event(
+                event_type=AuditLogger.EventType.WEBHOOK_SIGNATURE_FAILED,
+                severity=AuditLogger.Severity.WARNING,
+                ip_address=client_ip,
+                request_id=request_id,
+                details={"platform": "telegram", "reason": "invalid_webhook_secret"},
+            )
+            logger.warning("telegram_webhook_invalid_secret", ip_address=client_ip)
+            raise HTTPException(403, "Invalid webhook secret")
+
     body = await request.json()
     chat_id = str(body.get("message", {}).get("chat", {}).get("id", ""))
     text_msg = body.get("message", {}).get("text", "")
@@ -161,11 +184,24 @@ async def telegram(request: Request):
                         kb_dir.mkdir(parents=True, exist_ok=True)
                         save_path = kb_dir / file_name
                         save_path.write_bytes(dl.content)
+
+                        # Log document upload
+                        await audit_logger.log_event(
+                            event_type=AuditLogger.EventType.WEBHOOK_DOCUMENT_UPLOAD,
+                            severity=AuditLogger.Severity.INFO,
+                            user_id=uid,
+                            ip_address=client_ip,
+                            request_id=request_id,
+                            details={"platform": "telegram", "file_name": file_name, "file_size": len(dl.content)},
+                        )
+                        logger.info("telegram_document_uploaded", user_id=uid, file_name=file_name, file_size=len(dl.content))
+
                         await send_tg(chat_id, f"📎 Saved **{file_name}** to your knowledge base.")
                         stop_typing.set()
                         typing_task.cancel()
                         return {"status": "document_saved"}
             except Exception as e:
+                logger.error("telegram_document_upload_failed", user_id=str(u[0]), error=str(e), exc_info=True)
                 await send_tg(chat_id, "⚠️ Couldn't save the document. Please try again.")
                 stop_typing.set()
                 typing_task.cancel()
@@ -213,15 +249,28 @@ async def telegram(request: Request):
                 profile_dir=str(u[2]) if u[2] else None,
             )
             await send_tg(chat_id, resp)
+
+            # Log successful message processing
+            await audit_logger.log_event(
+                event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+                severity=AuditLogger.Severity.INFO,
+                user_id=str(u[0]),
+                ip_address=client_ip,
+                request_id=request_id,
+                details={"platform": "telegram", "message_length": len(text_msg)},
+            )
+            logger.info("telegram_message_processed", user_id=str(u[0]), message_length=len(text_msg))
+
         except Exception as e:
+            logger.error("telegram_message_processing_failed", user_id=str(u[0]), error=str(e), exc_info=True)
             await send_tg(chat_id, "⚠️ Something went wrong. Please try again in a moment.")
         finally:
             stop_typing.set()
             typing_task.cancel()
 
         await db.execute(
-            text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'message',:det)"),
-            {"uid": str(u[0]), "det": '{"platform":"telegram","tokens":' + str(len(text_msg) // 4) + "}"},
+            text("INSERT INTO activity_logs (user_id,action,details,request_id,ip_address) VALUES (:uid,'message',:det,:rid,:ip)"),
+            {"uid": str(u[0]), "det": '{"platform":"telegram","tokens":' + str(len(text_msg) // 4) + "}", "rid": request_id, "ip": client_ip},
         )
         await db.commit()
         return {"status": "ok"}
