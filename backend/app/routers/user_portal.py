@@ -54,7 +54,7 @@ async def list_reminders(user: dict = Depends(resolve_user)):
 async def list_projects(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, description, status FROM projects WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 20"),
+            text("SELECT id, title, description, status FROM projects WHERE user_id::text=:uid ORDER BY created_at DESC LIMIT 20"),
             {"uid": user["id"]},
         )
         projects = [{"id": str(row[0]), "title": row[1], "description": row[2], "status": row[3]} for row in r.fetchall()]

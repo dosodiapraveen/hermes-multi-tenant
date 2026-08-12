@@ -232,7 +232,7 @@ async def list_projects(uid: str) -> str:
     async with async_session_factory() as db:
         from sqlalchemy import text
         r = await db.execute(
-            text("SELECT title, status FROM projects WHERE user_id::text=:u ORDER BY updated_at DESC LIMIT 10"),
+            text("SELECT title, status FROM projects WHERE user_id::text=:u ORDER BY created_at DESC LIMIT 10"),
             {"u": uid},
         )
         rows = r.fetchall()
