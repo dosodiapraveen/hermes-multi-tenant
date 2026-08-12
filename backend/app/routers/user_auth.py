@@ -63,10 +63,15 @@ async def register(body: dict):
             {"p": profile_id, "e": email, "h": pw_hash, "t": vtoken, "ex": expires},
         )
         await db.commit()
-    link = f"{FRONTEND_URL}/user/verify?token={vtoken}"
-    html = f"""<h2>Welcome, {profile[1]}!</h2><p>Click the link below to verify your email:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
-    await send_email(email, "Verify your email", html)
-    return {"status": "registered", "message": "Verification email sent"}
+    # Try email, but always show the verification link so user isn't stuck
+    try:
+        link = f"{FRONTEND_URL}/user/verify?token={vtoken}"
+        html = f"""<h2>Welcome, {profile[1]}!</h2><p>Click below to verify your email:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
+        await send_email(email, "Verify your email", html)
+        sent = True
+    except Exception:
+        sent = False
+    return {"status": "registered", "message": "Verification email sent" if sent else "Verification pending", "verify_link": f"{FRONTEND_URL}/user/verify?token={vtoken}"}
 
 @router.get("/verify")
 async def verify(token: str = ""):

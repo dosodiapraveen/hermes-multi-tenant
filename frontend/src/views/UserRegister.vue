@@ -28,6 +28,7 @@ export default {
         const r=await fetch('/api/auth/user/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.email,password:this.password,profile_id})})
         const d=await r.json()
         if(r.ok) this.msg='✅ Verification email sent! Check your inbox.'
+        else if(d.verify_link) this.msg='✅ Account created! '+d.message+'. <a href="'+d.verify_link+'">Click here to verify</a>'
         else this.msg='❌ '+(d.detail||'Registration failed')
       }catch(e){this.msg='❌ Connection error'}
     }
