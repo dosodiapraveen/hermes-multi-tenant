@@ -6,7 +6,7 @@ from jose import jwt
 import httpx
 from app.config import settings
 from app.database import init_db, close_db
-from app.routers import admin, invite, webhook
+from app.routers import admin, invite, user_portal, webhook
 from app.auth import verify_jwt
 
 @asynccontextmanager
@@ -53,6 +53,7 @@ async def supabase_login(body: dict):
 
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(invite.router, prefix="/api/invite", tags=["invite"])
+app.include_router(user_portal.router, tags=["portal"])
 app.include_router(webhook.router, prefix="/api/webhook", tags=["webhook"])
 
 if __name__ == "__main__":

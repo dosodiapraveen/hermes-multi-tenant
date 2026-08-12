@@ -55,6 +55,52 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_reminder",
+            "description": "Set a reminder for the user. remind_at is optional (ISO datetime or natural language like 'tomorrow 2pm').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Reminder title"},
+                    "remind_at": {"type": "string", "description": "When to remind (optional, e.g. '2026-08-12T14:00')"},
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_reminders",
+            "description": "Show all reminders for the user.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_project",
+            "description": "Create a new project.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Project title"},
+                    "description": {"type": "string", "description": "Project description"},
+                },
+                "required": ["title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_projects",
+            "description": "Show all projects for the user.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
@@ -139,6 +185,61 @@ def read_knowledge_base(uid: str) -> str:
             size = f.stat().st_size
             docs.append(f"--- {f.name} ({size//1024} KB) ---\nUploaded document. Ask me about its contents.")
     return "\n\n".join(docs) if docs else "Knowledge base is empty."
+
+
+async def create_reminder(uid: str, title: str, remind_at: str = None) -> str:
+    """Create a reminder for a user."""
+    from app.database import async_session_factory
+    async with async_session_factory() as db:
+        from sqlalchemy import text
+        r = await db.execute(
+            text("INSERT INTO reminders (user_id, title, remind_at) VALUES (:u, :t, :r) RETURNING id"),
+            {"u": uid, "t": title, "r": remind_at},
+        )
+        await db.commit()
+        rid = r.fetchone()[0]
+        return f"Reminder set: {title}" + (f" for {remind_at}" if remind_at else "")
+
+
+async def list_reminders(uid: str) -> str:
+    from app.database import async_session_factory
+    async with async_session_factory() as db:
+        from sqlalchemy import text
+        r = await db.execute(
+            text("SELECT title, remind_at, done FROM reminders WHERE user_id::text=:u ORDER BY created_at DESC LIMIT 10"),
+            {"u": uid},
+        )
+        rows = r.fetchall()
+        if not rows:
+            return "No reminders."
+        return "\n".join(f"{'✅' if row[2] else '⏳'} {row[0]}{' at ' + str(row[1])[:16] if row[1] else ''}" for row in rows)
+
+
+async def create_project(uid: str, title: str, description: str = "") -> str:
+    from app.database import async_session_factory
+    async with async_session_factory() as db:
+        from sqlalchemy import text
+        await db.execute(
+            text("INSERT INTO projects (user_id, title, description) VALUES (:u, :t, :d)"),
+            {"u": uid, "t": title, "d": description},
+        )
+        await db.commit()
+        return f"Project created: {title}"
+
+
+async def list_projects(uid: str) -> str:
+    from app.database import async_session_factory
+    async with async_session_factory() as db:
+        from sqlalchemy import text
+        r = await db.execute(
+            text("SELECT title, status FROM projects WHERE user_id::text=:u ORDER BY updated_at DESC LIMIT 10"),
+            {"u": uid},
+        )
+        rows = r.fetchall()
+        if not rows:
+            return "No projects."
+        emojis = {"active": "🟢", "paused": "🟡", "done": "✅", "archived": "📦"}
+        return "\n".join(f"{emojis.get(row[1], '•')} {row[0]} ({row[1]})" for row in rows)
 
 
 async def search_web(query: str, num_results: int = 5) -> tuple:
@@ -260,6 +361,14 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                         result, _ = await search_web(args.get("query", ""))
                     elif name == "read_knowledge_base":
                         result = read_knowledge_base(uid)
+                    elif name == "create_reminder":
+                        result = await create_reminder(uid, args.get("title", ""), args.get("remind_at"))
+                    elif name == "list_reminders":
+                        result = await list_reminders(uid)
+                    elif name == "create_project":
+                        result = await create_project(uid, args.get("title", ""), args.get("description", ""))
+                    elif name == "list_projects":
+                        result = await list_projects(uid)
                     else:
                         result = "Done."
                 except Exception as e:

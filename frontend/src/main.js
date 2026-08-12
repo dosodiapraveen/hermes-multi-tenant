@@ -8,6 +8,7 @@ import Users from './views/Users.vue'
 import Invites from './views/Invites.vue'
 import Join from './views/Join.vue'
 import Usage from './views/Usage.vue'
+import UserPortal from './views/UserPortal.vue'
 import Settings from './views/Settings.vue'
 
 const routes = [
@@ -18,6 +19,7 @@ const routes = [
   { path: '/users', name: 'Users', component: Users, meta: { requiresAuth: true } },
   { path: '/invites', name: 'Invites', component: Invites, meta: { requiresAuth: true } },
   { path: '/usage', name: 'Usage', component: Usage, meta: { requiresAuth: true } },
+  { path: '/portal', name: 'UserPortal', component: UserPortal, meta: { public: true } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAuth: true } },
 ]
 
