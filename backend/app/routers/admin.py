@@ -213,6 +213,14 @@ async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
     if not u: raise HTTPException(404, "User not found")
     return {"id": str(u[0]), "agent_name": u[1], "phone_number": u[2], "timezone": u[3], "plan": u[4], "is_active": u[5]}
 
+@router.get("/users/{user_id}/register-link")
+async def user_register_link(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate a one-click registration link for the user dashboard."""
+    r = await db.execute(text("SELECT id, agent_name FROM user_profiles WHERE id::text=:uid"), {"uid": user_id})
+    u = r.fetchone()
+    if not u: raise HTTPException(404, "User not found")
+    return {"register_url": f"https://beprepared.dev/user/register?token={user_id}", "agent_name": u[1]}
+
 @router.post("/users/{user_id}/telegram-link")
 async def create_telegram_link(user_id: str, db: AsyncSession = Depends(get_db)):
     import secrets

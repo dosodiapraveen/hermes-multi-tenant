@@ -36,14 +36,25 @@ async def register(body: dict):
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
     profile_id = body.get("profile_id") or ""
-    if not email or not password or not profile_id:
-        raise HTTPException(400, "email, password, and profile_id required")
+    if not email or not password:
+        raise HTTPException(400, "email and password required")
     if len(password) < 6:
         raise HTTPException(400, "Password must be at least 6 characters")
     async with async_session_factory() as db:
+        # Verify the profile_id exists in user_profiles (only claimed agents)
+        if profile_id:
+            r = await db.execute(text("SELECT id, agent_name FROM user_profiles WHERE id::text=:p"), {"p": profile_id})
+            profile = r.fetchone()
+            if not profile:
+                raise HTTPException(404, "Agent profile not found. You need an invitation link to register.")
+        else:
+            raise HTTPException(400, "Registration requires an agent profile link. Contact your admin.")
+        
+        # Check email not already used
         existing = await db.execute(text("SELECT id FROM user_accounts WHERE email=:e"), {"e": email})
         if existing.fetchone():
             raise HTTPException(409, "Email already registered")
+        
         pw_hash = hash_password(password)
         vtoken = generate_token()
         expires = datetime.utcnow() + timedelta(hours=24)
@@ -53,7 +64,7 @@ async def register(body: dict):
         )
         await db.commit()
     link = f"{FRONTEND_URL}/user/verify?token={vtoken}"
-    html = f"""<h2>Welcome!</h2><p>Verify your email by clicking the link below:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
+    html = f"""<h2>Welcome, {profile[1]}!</h2><p>Click the link below to verify your email:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
     await send_email(email, "Verify your email", html)
     return {"status": "registered", "message": "Verification email sent"}
 
