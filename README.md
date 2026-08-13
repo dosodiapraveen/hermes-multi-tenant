@@ -74,6 +74,7 @@ Share the returned `link_url` with the user — they tap to connect.
 | Time | Task | Description |
 |------|------|-------------|
 | Every 5 min | Health check | API, DB, disk, containers → Telegram alert |
+| Every min | **Reminder worker** | Fires due reminders via Telegram + marks done |
 | 12:00 AM | **Security scan** | Open ports, permissions, Docker audit, SSH attempts |
 | 3:00 AM | Backup | Full DB + profiles + vaults (14-day retention) |
 | 8:00 AM | Usage report | Daily stats sent to admin |

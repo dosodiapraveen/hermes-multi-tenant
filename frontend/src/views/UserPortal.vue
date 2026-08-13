@@ -13,6 +13,27 @@
     <main>
       <!-- ─────── DASHBOARD ─────── -->
       <section v-if="tab==='dashboard'">
+        <div class="smart-search">
+          <div class="ss-input">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input v-model="searchQ" placeholder="Search everything — notes, projects, ideas... (e.g. 'market research')" @keyup.enter="doSearch" />
+            <button @click="doSearch" :disabled="searching">Search</button>
+          </div>
+          <p v-if="searching" class="ss-status">Searching your data...</p>
+          <p v-if="searchError" class="ss-status err">{{ searchError }}</p>
+          <div v-if="searchResults.length" class="ss-results">
+            <div class="ss-head">Top matches</div>
+            <div v-for="r in searchResults" :key="r.type+'-'+r.id" class="ss-item" @click="gotoResult(r)">
+              <span :class="'rbadge r-'+r.type">{{ typeLabel(r.type) }}</span>
+              <div class="rbody">
+                <strong>{{ r.title || '(untitled)' }}</strong>
+                <p>{{ snippet(r.content) }}</p>
+              </div>
+              <span class="rscore">{{ Math.round(r.score*100) }}%</span>
+            </div>
+            <button class="ss-clear" @click="searchResults=[]; searchQ=''">Clear results</button>
+          </div>
+        </div>
         <div class="grid">
           <div class="card" @click="tab='ideas'"><h3>💡 Ideas</h3><p class="count">{{ ideas.length }}</p></div>
           <div class="card" @click="tab='notes'"><h3>📝 Notes</h3><p class="count">{{ notes.length }}</p></div>
@@ -347,6 +368,7 @@
 export default {
   data(){return{
     token: localStorage.getItem('portal_token')||'', tab:'dashboard',
+    searchQ:'', searchResults:[], searching:false, searchError:'',
     user:'My Dashboard', notes:[], reminders:[], projects:[], activity:[], ideas:[], events:[], jobs:[],
     noteSearch:'', noteCategoryFilter:'', expandedNote:null, selectedProject:null,
     showNoteModal:false, editingNote:null, noteForm:{title:'',content:'',category:'General'},
@@ -402,6 +424,21 @@ export default {
         if(ep==='jobs'&&d)this.jobs=d.jobs||[]
         if(ep==='activity'&&d)this.activity=d.activity||[]
       }
+    },
+    typeLabel(t){return{note:'📝 Note',project:'📋 Project',research:'📄 Research',idea:'💡 Idea',reminder:'⏰ Reminder',vault:'📁 Vault'}[t]||t},
+    snippet(s){return (s||'').replace(/\n+/g,' ').slice(0,160)},
+    async doSearch(){
+      const q=this.searchQ.trim(); if(!q) return
+      this.searching=true; this.searchError=''
+      const d=await this.api('GET','/api/me/search?q='+encodeURIComponent(q))
+      this.searching=false
+      if(d&&d.results){this.searchResults=d.results}
+      else this.searchError=(d&&d.error)||'Search failed'
+    },
+    gotoResult(r){
+      // Jump to relevant tab
+      const t=r.type; const map={note:'notes',project:'projects',research:'projects',idea:'notes',reminder:'reminders',vault:'notes'}
+      this.tab=map[t]||'dashboard'
     },
     logout(){localStorage.removeItem('portal_token');localStorage.removeItem('profile_id');window.location='/user/login'},
 
@@ -684,4 +721,26 @@ main{max-width:960px;margin:0 auto;padding:20px}
 .widget-item:last-child{border-bottom:none}
 .empty-widget{color:#999;font-size:14px;text-align:center;padding:20px;background:#fff;border-radius:10px}
 .warning-box{background:#fff3cd;color:#856404;padding:12px 16px;border-radius:10px;margin-top:16px;border-left:4px solid #ffc107}
+/* Smart search */
+.smart-search{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px}
+.ss-input{display:flex;gap:8px;align-items:center}
+.ss-input svg{color:#888;flex-shrink:0}
+.ss-input input{flex:1;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px}
+.ss-input button{background:#6C5CE7;color:#fff;border:none;border-radius:10px;padding:11px 18px;cursor:pointer;font-size:14px}
+.ss-status{font-size:13px;color:#888;margin:8px 0 0}
+.ss-status.err{color:#dc2626}
+.ss-results{margin-top:14px;border-top:1px solid #eee;padding-top:12px}
+.ss-head{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.ss-item{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:8px;cursor:pointer}
+.ss-item:hover{background:#f4f2ff}
+.rbadge{font-size:11px;padding:2px 8px;border-radius:8px;white-space:nowrap;flex-shrink:0;margin-top:2px}
+.r-note{background:#eef1ff;color:#6C5CE7}.r-project{background:#d4edda;color:#155724}
+.r-research{background:#cce5ff;color:#004085}.r-idea{background:#fff3cd;color:#856404}
+.r-reminder{background:#fde8e8;color:#9b1c1c}.r-vault{background:#e2e3e5;color:#383d41}
+.rbody{flex:1;min-width:0}
+.rbody strong{font-size:14px;display:block}
+.rbody p{margin:2px 0 0;font-size:13px;color:#636E70;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rscore{font-size:12px;color:#16a34a;flex-shrink:0}
+.ss-clear{margin-top:8px;background:none;border:none;color:#6C5CE7;cursor:pointer;font-size:13px}
+
 </style>

@@ -139,6 +139,20 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_user_data",
+            "description": "Semantically search across the user's own data (notes, projects, research, ideas, reminders, vault). Use for 'what did I write about X' or to recall the user's own stored information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language search query"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
@@ -451,6 +465,20 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                         result = await create_dashboard_note(uid, args.get("title", ""), args.get("content", ""), args.get("category", "General"))
                     elif name == "list_dashboard_notes":
                         result = await list_dashboard_notes(uid)
+                    elif name == "search_user_data":
+                        from app.services.search import search_user_data as _search
+                        try:
+                            _r = await _search(uid, args.get("query", ""), limit=6)
+                            _results = _r.get("results", [])
+                            if not _results:
+                                result = "No matches found in your data."
+                            else:
+                                _out = ["Here's what I found in your data:"]
+                                for _it in _results[:6]:
+                                    _out.append(f"• [{_it.get('type','')}] {_it.get('title','')}: {_it.get('content','')[:180].replace(chr(10),' ')} (score {_it.get('score','')})")
+                                result = "\n".join(_out)
+                        except Exception as _e:
+                            result = f"Search error: {_e}"
                     elif name == "get_project_detail":
                         pid = args.get("project_id", "")
                         from app.database import async_session_factory

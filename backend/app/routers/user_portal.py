@@ -179,6 +179,29 @@ async def delete_research(project_id: str, research_id: str, user: dict = Depend
 
 # ═══════════════════════════ REMINDERS ═══════════════════════════
 
+
+# ═══════════════════════════ SEMANTIC SEARCH ═══════════════════════════
+
+@router.get("/search")
+async def search_data(q: str = "", limit: int = 8, user: dict = Depends(resolve_user)):
+    """Semantic search across the user's notes, projects, research, ideas,
+    reminders, and vault. Auto-indexes on first use."""
+    from app.services.search import search_user_data
+    if not q.strip():
+        return {"results": []}
+    return await search_user_data(user["id"], q.strip(), min(limit, 25))
+
+
+@router.post("/search/index")
+async def reindex_data(user: dict = Depends(resolve_user)):
+    """(Re)index all of the user's data into embeddings."""
+    from app.services.search import index_user_data
+    try:
+        n = await index_user_data(user["id"])
+        return {"indexed": n}
+    except Exception as e:
+        return {"error": str(e), "indexed": 0}
+
 @router.get("/reminders")
 async def list_reminders(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
