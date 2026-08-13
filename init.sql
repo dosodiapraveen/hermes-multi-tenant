@@ -177,3 +177,9 @@ CREATE TABLE IF NOT EXISTS background_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON background_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_enabled ON background_jobs(is_enabled, next_run_at);
+
+-- Schema migration tracking
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

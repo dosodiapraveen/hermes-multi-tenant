@@ -7,6 +7,7 @@ and administrative actions with database persistence.
 
 from typing import Optional, Dict, Any
 from datetime import datetime
+import json
 from app.logging_config import get_logger
 from app.database import async_session_factory
 
@@ -134,7 +135,7 @@ class AuditLogger:
                         "user_agent": user_agent,
                         "request_id": request_id,
                         "admin_email": admin_email,
-                        "details": details or {},
+                        "details": json.dumps(details) if details else "{}",
                         "timestamp": datetime.utcnow(),
                     }
                 )
