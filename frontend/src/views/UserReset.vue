@@ -1,7 +1,7 @@
 <template>
   <div class="auth-page">
     <h1>Set New Password</h1>
-    <input v-model="password" placeholder="New password (min 6 chars)" type="password" />
+    <input v-model="password" placeholder="New password (min 12 chars, uppercase, lowercase, number)" type="password" />
     <button @click="reset">Reset Password</button>
     <p v-if="msg">{{ msg }}</p>
     <p v-if="success"><a href="/user/login">Login now</a></p>
@@ -11,9 +11,35 @@
 export default {
   data(){return{password:'',msg:'',success:false}},
   methods:{
+    validatePassword(password) {
+      if (password.length < 12) return 'Password must be at least 12 characters'
+      if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter'
+      if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter'
+      if (!/[0-9]/.test(password)) return 'Password must contain at least one number'
+      return null
+    },
     async reset(){
+      // Clear previous messages
+      this.msg = ''
+      this.success = false
+
       const token=new URLSearchParams(location.search).get('token')
-      if(!token){this.msg='❌ Missing reset token';return}
+      if(!token){
+        this.msg='❌ Missing reset token'
+        return
+      }
+
+      // Validate password
+      if (!this.password) {
+        this.msg = '❌ Password is required'
+        return
+      }
+      const passwordError = this.validatePassword(this.password)
+      if (passwordError) {
+        this.msg = '❌ ' + passwordError
+        return
+      }
+
       try{
         const r=await fetch('/api/auth/user/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,password:this.password})})
         const d=await r.json()

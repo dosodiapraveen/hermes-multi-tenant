@@ -11,7 +11,24 @@
 export default {
   data(){return{email:'',msg:''}},
   methods:{
+    validateEmail(email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      return re.test(email)
+    },
     async forgot(){
+      // Clear previous messages
+      this.msg = ''
+
+      // Validate email
+      if (!this.email) {
+        this.msg = '❌ Email is required'
+        return
+      }
+      if (!this.validateEmail(this.email)) {
+        this.msg = '❌ Please enter a valid email address'
+        return
+      }
+
       try{
         const r=await fetch('/api/auth/user/forgot-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.email})})
         const d=await r.json()

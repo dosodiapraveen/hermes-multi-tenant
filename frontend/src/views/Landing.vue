@@ -5,7 +5,6 @@
       <nav class="header-nav">
         <a href="#features">Features</a>
         <a href="#pricing">Pricing</a>
-        <router-link to="/login" class="btn-outline">Admin Login</router-link>
       </nav>
     </header>
 
@@ -16,7 +15,7 @@
         <h1>AI Agents for<br/><span class="gradient">Every User.</span></h1>
         <p>Deploy personalized AI agents for your customers in minutes. Each user gets their own isolated agent with Telegram, web access, and a private knowledge vault.</p>
         <div class="hero-actions">
-          <router-link to="/login" class="btn-primary">Get Started</router-link>
+          <router-link to="/user/login" class="btn-primary">Get Started</router-link>
           <a href="#features" class="btn-ghost">Learn More</a>
         </div>
       </div>
@@ -37,16 +36,16 @@
     <section id="pricing" class="pricing">
       <h2>Simple pricing.<br/><span class="gradient">Scale as you grow.</span></h2>
       <div class="pricing-grid">
-        <div class="plan"><h3>Basic</h3><div class="price">$5<span>/mo</span></div><ul><li>1 agent</li><li>100 msgs/day</li><li>Single AI model</li><li>Obsidian vault</li></ul><router-link to="/login" class="btn-primary">Get Started</router-link></div>
-        <div class="plan popular"><div class="pop-badge">Most Popular</div><h3>Pro</h3><div class="price">$15<span>/mo</span></div><ul><li>Up to 3 agents</li><li>500 msgs/day</li><li>Multi-model support</li><li>Obsidian vault</li><li>Web browser access</li></ul><router-link to="/login" class="btn-primary">Get Started</router-link></div>
-        <div class="plan"><h3>Business</h3><div class="price">$35<span>/mo</span></div><ul><li>Up to 10 agents</li><li>2000 msgs/day</li><li>All models + vision</li><li>Priority support</li><li>Custom integrations</li></ul><router-link to="/login" class="btn-primary">Get Started</router-link></div>
+        <div class="plan"><h3>Basic</h3><div class="price">$5<span>/mo</span></div><ul><li>1 agent</li><li>100 msgs/day</li><li>Single AI model</li><li>Obsidian vault</li></ul><router-link to="/user/login" class="btn-primary">Get Started</router-link></div>
+        <div class="plan popular"><div class="pop-badge">Most Popular</div><h3>Pro</h3><div class="price">$15<span>/mo</span></div><ul><li>Up to 3 agents</li><li>500 msgs/day</li><li>Multi-model support</li><li>Obsidian vault</li><li>Web browser access</li></ul><router-link to="/user/login" class="btn-primary">Get Started</router-link></div>
+        <div class="plan"><h3>Business</h3><div class="price">$35<span>/mo</span></div><ul><li>Up to 10 agents</li><li>2000 msgs/day</li><li>All models + vision</li><li>Priority support</li><li>Custom integrations</li></ul><router-link to="/user/login" class="btn-primary">Get Started</router-link></div>
       </div>
     </section>
 
     <footer class="footer">
       <div class="footer-inner">
         <div class="footer-brand"><div class="logo-icon">H</div><span>Hermes</span></div>
-        <div class="footer-links"><a href="#features">Features</a><a href="#pricing">Pricing</a><router-link to="/login">Admin Login</router-link></div>
+        <div class="footer-links"><a href="#features">Features</a><a href="#pricing">Pricing</a></div>
         <div class="footer-copy">Built with Hermes Agent by Nous Research</div>
       </div>
     </footer>

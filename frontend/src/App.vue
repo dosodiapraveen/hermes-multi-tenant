@@ -47,7 +47,7 @@ export default {
   data() { return { userEmail: localStorage.getItem('email') || 'Admin' }},
   computed: { isLoggedIn() { return !!localStorage.getItem('token') }},
   methods: {
-    logout() { localStorage.removeItem('token'); localStorage.removeItem('email'); this.$router.push('/login') }
+    logout() { localStorage.removeItem('token'); localStorage.removeItem('email'); this.$router.push('/internal/admin-login') }
   },
   created() { this.$router.afterEach(() => { this.userEmail = localStorage.getItem('email') || 'Admin' }) }
 }

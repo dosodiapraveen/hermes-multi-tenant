@@ -8,7 +8,7 @@ and administrative actions with database persistence.
 from typing import Optional, Dict, Any
 from datetime import datetime
 from app.logging_config import get_logger
-from app.database import get_db_pool
+from app.database import async_session_factory
 
 logger = get_logger(__name__)
 
@@ -117,25 +117,29 @@ class AuditLogger:
 
         # Persist to database for long-term audit trail
         try:
-            pool = get_db_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    """
+            from sqlalchemy import text as sql_text
+            async with async_session_factory() as db:
+                await db.execute(
+                    sql_text("""
                     INSERT INTO audit_logs
                     (event_type, severity, user_id, ip_address, user_agent,
                      request_id, admin_email, details, timestamp)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    """,
-                    event_type,
-                    severity,
-                    user_id,
-                    ip_address,
-                    user_agent,
-                    request_id,
-                    admin_email,
-                    details or {},
-                    datetime.utcnow(),
+                    VALUES (:event_type, :severity, :user_id, :ip_address, :user_agent,
+                     :request_id, :admin_email, :details, :timestamp)
+                    """),
+                    {
+                        "event_type": event_type,
+                        "severity": severity,
+                        "user_id": user_id,
+                        "ip_address": ip_address,
+                        "user_agent": user_agent,
+                        "request_id": request_id,
+                        "admin_email": admin_email,
+                        "details": details or {},
+                        "timestamp": datetime.utcnow(),
+                    }
                 )
+                await db.commit()
         except Exception as e:
             # Never fail the request due to audit logging issues
             logger.error(

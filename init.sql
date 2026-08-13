@@ -97,7 +97,8 @@ CREATE TABLE IF NOT EXISTS reminders (
     title TEXT NOT NULL,
     remind_at TIMESTAMPTZ NOT NULL,
     done BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -127,3 +128,52 @@ CREATE TABLE IF NOT EXISTS project_research (
     content TEXT DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS ideas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'brainstorm' CHECK (status IN ('brainstorm','developing','ready','archived')),
+    tags TEXT DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ideas_user ON ideas(user_id);
+CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);
+
+CREATE TABLE IF NOT EXISTS scheduled_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    event_start TIMESTAMPTZ NOT NULL,
+    event_end TIMESTAMPTZ NOT NULL,
+    location TEXT DEFAULT '',
+    is_all_day BOOLEAN NOT NULL DEFAULT FALSE,
+    recurrence TEXT DEFAULT 'none',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_user_date ON scheduled_events(user_id, event_start DESC);
+
+CREATE TABLE IF NOT EXISTS background_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    job_type TEXT NOT NULL CHECK (job_type IN ('email','webhook','cleanup','report','custom')),
+    cron_expression TEXT NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    last_run_at TIMESTAMPTZ,
+    next_run_at TIMESTAMPTZ NOT NULL,
+    last_result TEXT,
+    config JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_user ON background_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_enabled ON background_jobs(is_enabled, next_run_at);

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import Landing from './views/Landing.vue'
 import Login from './views/Login.vue'
+import AdminLogin from './views/AdminLogin.vue'
 import Dashboard from './views/Dashboard.vue'
 import Users from './views/Users.vue'
 import Invites from './views/Invites.vue'
@@ -18,7 +19,8 @@ import Settings from './views/Settings.vue'
 
 const routes = [
   { path: '/', name: 'Landing', component: Landing, meta: { public: true } },
-  { path: '/login', name: 'Login', component: Login, meta: { public: true } },
+  { path: '/login', redirect: '/user/login' },
+  { path: '/internal/admin-login', name: 'AdminLogin', component: AdminLogin, meta: { public: true } },
   { path: '/join/:code', name: 'Join', component: Join, meta: { public: true } },
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { requiresAuth: true } },
   { path: '/users', name: 'Users', component: Users, meta: { requiresAuth: true } },
@@ -39,7 +41,7 @@ const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
-    next('/login')
+    next('/user/login')
   } else {
     next()
   }

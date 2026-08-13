@@ -14,13 +14,33 @@
       <!-- ─────── DASHBOARD ─────── -->
       <section v-if="tab==='dashboard'">
         <div class="grid">
+          <div class="card" @click="tab='ideas'"><h3>💡 Ideas</h3><p class="count">{{ ideas.length }}</p></div>
           <div class="card" @click="tab='notes'"><h3>📝 Notes</h3><p class="count">{{ notes.length }}</p></div>
           <div class="card" @click="tab='reminders'"><h3>⏰ Reminders</h3><p class="count">{{ reminders.filter(r=>!r.done).length }}</p></div>
           <div class="card" @click="tab='projects'"><h3>📋 Projects</h3><p class="count">{{ projects.length }}</p></div>
-          <div class="card" @click="tab='activity'"><h3>📊 Activity</h3><p class="count">{{ activity.length }}</p></div>
         </div>
-        <div class="quick-tips">
-          <p>💡 Tell your agent: <em>"Save a note about Q4 planning"</em> or <em>"Create project Product Launch"</em></p>
+
+        <h3 style="margin:20px 0 12px;font-size:16px">📅 Upcoming Events</h3>
+        <div v-if="upcomingEvents.length" class="widget-list">
+          <div v-for="evt in upcomingEvents" :key="evt.id" class="widget-item" @click="tab='schedule'">
+            <span class="event-date">{{ formatEventDate(evt.event_start).split(' ')[0] }}</span>
+            <strong>{{ evt.title }}</strong>
+            <span v-if="evt.location" class="item-meta">📍 {{ evt.location }}</span>
+          </div>
+        </div>
+        <p v-else class="empty-widget">No upcoming events</p>
+
+        <h3 style="margin:20px 0 12px;font-size:16px">💭 Recent Ideas</h3>
+        <div v-if="recentIdeas.length" class="widget-list">
+          <div v-for="idea in recentIdeas" :key="idea.id" class="widget-item" @click="tab='ideas'">
+            <span :class="'badge-status badge-'+idea.status">{{ statusBadge(idea.status) }}</span>
+            <strong>{{ idea.title }}</strong>
+          </div>
+        </div>
+        <p v-else class="empty-widget">No ideas yet - start brainstorming!</p>
+
+        <div v-if="failedJobs.length" class="warning-box">
+          ⚠️ <strong>{{ failedJobs.length }}</strong> background job(s) need attention - <a @click="tab='jobs'" style="color:#e74c3c;cursor:pointer;text-decoration:underline">View Jobs</a>
         </div>
       </section>
 
@@ -46,14 +66,60 @@
         <p v-if="!filteredNotes.length" class="empty">No notes yet.</p>
       </section>
 
+      <!-- ─────── IDEAS ─────── -->
+      <section v-if="tab==='ideas'">
+        <div class="section-header"><h2>💡 Ideas</h2><button class="btn-primary" @click="openIdeaModal()">+ New Idea</button></div>
+
+        <div class="idea-grid">
+          <div v-for="idea in ideas" :key="idea.id" class="idea-card">
+            <div class="idea-header">
+              <strong>{{ idea.title }}</strong>
+              <span :class="'badge-status badge-'+idea.status">{{ statusBadge(idea.status) }}</span>
+            </div>
+            <p class="idea-content">{{ idea.content?.slice(0,100) }}</p>
+            <div class="idea-footer">
+              <span v-if="idea.tags" class="idea-tags">{{ idea.tags }}</span>
+              <div class="item-actions">
+                <button class="btn-sm" @click="openIdeaModal(idea)">Edit</button>
+                <button class="btn-sm btn-danger" @click="deleteIdea(idea.id)">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p v-if="!ideas.length" class="empty">No ideas yet. Start brainstorming!</p>
+      </section>
+
+      <!-- ─────── SCHEDULE ─────── -->
+      <section v-if="tab==='schedule'">
+        <div class="section-header"><h2>📅 Schedule</h2><button class="btn-primary" @click="openEventModal()">+ New Event</button></div>
+
+        <div v-for="evt in events" :key="evt.id" class="list-item event-item">
+          <div style="flex:1">
+            <div class="item-top">
+              <span class="event-date">{{ formatEventDate(evt.event_start) }}</span>
+              <strong class="item-title">{{ evt.title }}</strong>
+              <span v-if="evt.is_all_day" class="badge-cat">All Day</span>
+            </div>
+            <div v-if="evt.description" class="item-meta">{{ evt.description }}</div>
+            <div class="item-meta" v-if="evt.location">📍 {{ evt.location }}</div>
+          </div>
+          <div class="item-actions">
+            <button class="btn-sm" @click="openEventModal(evt)">Edit</button>
+            <button class="btn-sm btn-danger" @click="deleteEvent(evt.id)">Delete</button>
+          </div>
+        </div>
+        <p v-if="!events.length" class="empty">No events scheduled yet.</p>
+      </section>
+
       <!-- ─────── REMINDERS ─────── -->
       <section v-if="tab==='reminders'">
-        <div class="section-header"><h2>⏰ Reminders</h2></div>
+        <div class="section-header"><h2>⏰ Reminders</h2><button class="btn-primary" @click="openReminderModal()">+ New Reminder</button></div>
         <div v-for="r in reminders" :key="r.id" class="list-item" :class="{done:r.done}">
-          <label class="checkbox"><input type="checkbox" :checked="r.done" @change="r.done=!r.done" /><span></span></label>
-          <div><div class="item-title" :class="r.done?'strikethrough':''">{{ r.title }}</div><div class="item-meta" v-if="r.remind_at">{{ r.remind_at.slice(0,10) }}</div></div>
+          <label class="checkbox"><input type="checkbox" :checked="r.done" @change="toggleReminder(r)" /><span></span></label>
+          <div style="flex:1"><div class="item-title" :class="r.done?'strikethrough':''">{{ r.title }}</div><div class="item-meta" v-if="r.remind_at">{{ r.remind_at.slice(0,16).replace('T', ' ') }}</div></div>
+          <button class="btn-sm btn-danger" @click.stop="deleteReminder(r.id)">Delete</button>
         </div>
-        <p v-if="!reminders.length" class="empty">No reminders. Tell your agent: "Remind me..."</p>
+        <p v-if="!reminders.length" class="empty">No reminders yet.</p>
       </section>
 
       <!-- ─────── PROJECTS ─────── -->
@@ -95,6 +161,39 @@
           </div>
           <p v-if="!(selectedProject.research||[]).length" class="empty">No research added yet.</p>
         </div>
+      </section>
+
+      <!-- ─────── JOBS ─────── -->
+      <section v-if="tab==='jobs'">
+        <div class="section-header"><h2>⚙️ Background Jobs</h2><button class="btn-primary" @click="openJobModal()">+ New Job</button></div>
+
+        <div class="jobs-table">
+          <div class="job-row job-header">
+            <div style="flex:2">Title</div>
+            <div style="flex:1">Type</div>
+            <div style="flex:1.5">Schedule</div>
+            <div style="flex:1">Next Run</div>
+            <div style="flex:0.5">Status</div>
+            <div style="flex:1">Actions</div>
+          </div>
+          <div v-for="job in jobs" :key="job.id" class="job-row">
+            <div style="flex:2"><strong>{{ job.title }}</strong><div class="item-meta">{{ job.description }}</div></div>
+            <div style="flex:1"><span class="badge-cat">{{ job.job_type }}</span></div>
+            <div style="flex:1.5" class="item-meta">{{ job.cron_expression }}</div>
+            <div style="flex:1" class="item-meta">{{ formatJobDate(job.next_run_at) }}</div>
+            <div style="flex:0.5">
+              <label class="toggle" @click.stop="toggleJob(job)">
+                <input type="checkbox" :checked="job.is_enabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+            <div style="flex:1" class="item-actions">
+              <button class="btn-sm" @click="openJobModal(job)">Edit</button>
+              <button class="btn-sm btn-danger" @click="deleteJob(job.id)">Delete</button>
+            </div>
+          </div>
+        </div>
+        <p v-if="!jobs.length" class="empty">No background jobs configured yet.</p>
       </section>
 
       <!-- ─────── ACTIVITY ─────── -->
@@ -147,6 +246,100 @@
         </div>
       </div>
     </div>
+
+    <!-- ─────── REMINDER MODAL ─────── -->
+    <div v-if="showReminderModal" class="modal-overlay" @click.self="showReminderModal=false">
+      <div class="modal">
+        <h2>New Reminder</h2>
+        <input v-model="reminderForm.title" placeholder="What do you want to be reminded about?" />
+        <label style="font-size:13px;color:#666;margin-top:8px;display:block">Remind me at:</label>
+        <input v-model="reminderForm.remind_at" type="datetime-local" />
+        <div class="modal-row">
+          <button class="btn-primary" @click="saveReminder">Save</button>
+          <button class="btn-outline" @click="showReminderModal=false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────── IDEA MODAL ─────── -->
+    <div v-if="showIdeaModal" class="modal-overlay" @click.self="showIdeaModal=false">
+      <div class="modal">
+        <h2>{{ editingIdea ? 'Edit' : 'New' }} Idea</h2>
+        <input v-model="ideaForm.title" placeholder="Idea title" />
+        <textarea v-model="ideaForm.content" placeholder="Details about your idea..." rows="5"></textarea>
+        <div class="modal-row">
+          <select v-model="ideaForm.status" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px">
+            <option value="brainstorm">💭 Brainstorm</option>
+            <option value="developing">🔨 Developing</option>
+            <option value="ready">✅ Ready</option>
+            <option value="archived">📦 Archived</option>
+          </select>
+          <input v-model="ideaForm.tags" placeholder="Tags (comma separated)" style="flex:1" />
+        </div>
+        <div class="modal-row">
+          <button class="btn-primary" @click="saveIdea">Save</button>
+          <button class="btn-outline" @click="showIdeaModal=false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────── EVENT MODAL ─────── -->
+    <div v-if="showEventModal" class="modal-overlay" @click.self="showEventModal=false">
+      <div class="modal">
+        <h2>{{ editingEvent ? 'Edit' : 'New' }} Event</h2>
+        <input v-model="eventForm.title" placeholder="Event title" />
+        <textarea v-model="eventForm.description" placeholder="Description" rows="2"></textarea>
+        <div class="modal-row">
+          <div style="flex:1">
+            <label style="font-size:12px;color:#666;display:block;margin-bottom:4px">Start</label>
+            <input v-model="eventForm.event_start" type="datetime-local" />
+          </div>
+          <div style="flex:1">
+            <label style="font-size:12px;color:#666;display:block;margin-bottom:4px">End</label>
+            <input v-model="eventForm.event_end" type="datetime-local" />
+          </div>
+        </div>
+        <input v-model="eventForm.location" placeholder="Location (optional)" />
+        <label style="font-size:13px;display:flex;align-items:center;gap:8px;margin:8px 0">
+          <input type="checkbox" v-model="eventForm.is_all_day" />
+          <span>All-day event</span>
+        </label>
+        <div class="modal-row">
+          <button class="btn-primary" @click="saveEvent">Save</button>
+          <button class="btn-outline" @click="showEventModal=false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────── JOB MODAL ─────── -->
+    <div v-if="showJobModal" class="modal-overlay" @click.self="showJobModal=false">
+      <div class="modal">
+        <h2>{{ editingJob ? 'Edit' : 'New' }} Background Job</h2>
+        <input v-model="jobForm.title" placeholder="Job title" />
+        <textarea v-model="jobForm.description" placeholder="Description" rows="2"></textarea>
+        <div class="modal-row">
+          <select v-model="jobForm.job_type" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px">
+            <option value="email">📧 Email</option>
+            <option value="webhook">🔗 Webhook</option>
+            <option value="cleanup">🧹 Cleanup</option>
+            <option value="report">📊 Report</option>
+            <option value="custom">⚙️ Custom</option>
+          </select>
+        </div>
+        <label style="font-size:13px;color:#666;display:block;margin-top:8px">Schedule (cron)</label>
+        <select v-model="jobForm.cron_expression" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;margin:4px 0">
+          <option value="0 9 * * *">Daily at 9:00 AM</option>
+          <option value="0 0 * * 1">Weekly (Monday midnight)</option>
+          <option value="0 0 1 * *">Monthly (1st day)</option>
+          <option value="*/30 * * * *">Every 30 minutes</option>
+          <option value="0 */6 * * *">Every 6 hours</option>
+        </select>
+        <div class="modal-row">
+          <button class="btn-primary" @click="saveJob">Save</button>
+          <button class="btn-outline" @click="showJobModal=false">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -154,22 +347,39 @@
 export default {
   data(){return{
     token: localStorage.getItem('portal_token')||'', tab:'dashboard',
-    user:'My Dashboard', notes:[], reminders:[], projects:[], activity:[],
+    user:'My Dashboard', notes:[], reminders:[], projects:[], activity:[], ideas:[], events:[], jobs:[],
     noteSearch:'', noteCategoryFilter:'', expandedNote:null, selectedProject:null,
     showNoteModal:false, editingNote:null, noteForm:{title:'',content:'',category:'General'},
     showProjectModal:false, editingProject:null, projectForm:{title:'',description:''},
     showResearchModal:false, researchForm:{title:'',content:''},
-    tabs:[{key:'dashboard',label:'🏠'},{key:'notes',label:'Notes'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'activity',label:'Activity'}],
+    showReminderModal:false, reminderForm:{title:'',remind_at:''},
+    showIdeaModal:false, editingIdea:null, ideaForm:{title:'',content:'',status:'brainstorm',tags:''},
+    showEventModal:false, editingEvent:null, eventForm:{title:'',description:'',event_start:'',event_end:'',location:'',is_all_day:false},
+    showJobModal:false, editingJob:null, jobForm:{title:'',description:'',job_type:'custom',cron_expression:'0 9 * * *'},
+    tabs:[{key:'dashboard',label:'🏠'},{key:'ideas',label:'Ideas'},{key:'notes',label:'Notes'},{key:'schedule',label:'Schedule'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'jobs',label:'Jobs'},{key:'activity',label:'Activity'}],
   }},
   computed:{
-    counts(){return{notes:this.notes.length,reminders:this.reminders.filter(r=>!r.done).length,projects:this.projects.length,activity:this.activity.length}},
+    counts(){
+      return{
+        ideas:this.ideas.filter(i=>i.status==='brainstorm').length,
+        notes:this.notes.length,
+        schedule:this.events.length,
+        reminders:this.reminders.filter(r=>!r.done).length,
+        projects:this.projects.filter(p=>p.status==='active').length,
+        jobs:this.jobs.filter(j=>j.is_enabled).length,
+        activity:this.activity.length
+      }
+    },
     noteCategories(){return[...new Set(this.notes.map(n=>n.category).filter(Boolean))]},
     filteredNotes(){
       let n=this.notes
       if(this.noteSearch) n=n.filter(x=>x.title.toLowerCase().includes(this.noteSearch.toLowerCase()))
       if(this.noteCategoryFilter) n=n.filter(x=>x.category===this.noteCategoryFilter)
       return n
-    }
+    },
+    upcomingEvents(){return this.events.slice(0,3)},
+    recentIdeas(){return this.ideas.filter(i=>i.status==='brainstorm').slice(0,3)},
+    failedJobs(){return this.jobs.filter(j=>j.last_result&&j.last_result.includes('fail'))}
   },
   methods:{
     statusLabel(s){return{active:'🟢 Active',paused:'🟡 Paused',done:'✅ Done',archived:'📦 Archived'}[s]||s},
@@ -182,11 +392,14 @@ export default {
     },
     async fetchData(){
       if(!this.token){window.location='/user/login';return}
-      for(const ep of['notes','reminders','projects','activity']){
+      for(const ep of['notes','ideas','reminders','events','projects','jobs','activity']){
         const d=await this.api('GET','/api/me/'+ep)
         if(ep==='notes'&&d){this.notes=d.notes||[];this.user=d.user||this.user}
+        if(ep==='ideas'&&d)this.ideas=d.ideas||[]
         if(ep==='reminders'&&d)this.reminders=d.reminders||[]
+        if(ep==='events'&&d)this.events=d.events||[]
         if(ep==='projects'&&d)this.projects=d.projects||[]
+        if(ep==='jobs'&&d)this.jobs=d.jobs||[]
         if(ep==='activity'&&d)this.activity=d.activity||[]
       }
     },
@@ -254,6 +467,105 @@ export default {
       if(!confirm('Delete this research?'))return
       await this.api('DELETE',`/api/me/projects/${pid}/research/${rid}`)
       this.selectedProject=await this.api('GET',`/api/me/projects/${this.selectedProject.id}`)
+    },
+
+    // Reminders
+    openReminderModal(){this.reminderForm={title:'',remind_at:''};this.showReminderModal=true},
+    async saveReminder(){
+      if(!this.reminderForm.title||!this.reminderForm.remind_at)return
+      await this.api('POST','/api/me/reminders',this.reminderForm)
+      this.showReminderModal=false;await this.fetchData()
+    },
+    async toggleReminder(r){
+      await this.api('PUT',`/api/me/reminders/${r.id}`,{done:!r.done})
+      r.done=!r.done
+    },
+    async deleteReminder(id){
+      if(!confirm('Delete this reminder?'))return
+      await this.api('DELETE',`/api/me/reminders/${id}`)
+      await this.fetchData()
+    },
+
+    // Ideas
+    statusBadge(s){return{brainstorm:'💭 Brainstorm',developing:'🔨 Developing',ready:'✅ Ready',archived:'📦 Archived'}[s]||s},
+    openIdeaModal(idea){
+      this.editingIdea=idea||null
+      this.ideaForm={title:idea?.title||'',content:idea?.content||'',status:idea?.status||'brainstorm',tags:idea?.tags||''}
+      this.showIdeaModal=true
+    },
+    async saveIdea(){
+      if(!this.ideaForm.title)return
+      if(this.editingIdea){
+        await this.api('PUT',`/api/me/ideas/${this.editingIdea.id}`,this.ideaForm)
+      }else{
+        await this.api('POST','/api/me/ideas',this.ideaForm)
+      }
+      this.showIdeaModal=false;this.editingIdea=null;await this.fetchData()
+    },
+    async deleteIdea(id){
+      if(!confirm('Delete this idea?'))return
+      await this.api('DELETE',`/api/me/ideas/${id}`)
+      await this.fetchData()
+    },
+
+    // Schedule/Events
+    formatEventDate(dt){if(!dt)return'';const d=new Date(dt);return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})},
+    openEventModal(evt){
+      this.editingEvent=evt||null
+      this.eventForm={
+        title:evt?.title||'',
+        description:evt?.description||'',
+        event_start:evt?.event_start||'',
+        event_end:evt?.event_end||'',
+        location:evt?.location||'',
+        is_all_day:evt?.is_all_day||false
+      }
+      this.showEventModal=true
+    },
+    async saveEvent(){
+      if(!this.eventForm.title||!this.eventForm.event_start||!this.eventForm.event_end)return
+      if(this.editingEvent){
+        await this.api('PUT',`/api/me/events/${this.editingEvent.id}`,this.eventForm)
+      }else{
+        await this.api('POST','/api/me/events',this.eventForm)
+      }
+      this.showEventModal=false;this.editingEvent=null;await this.fetchData()
+    },
+    async deleteEvent(id){
+      if(!confirm('Delete this event?'))return
+      await this.api('DELETE',`/api/me/events/${id}`)
+      await this.fetchData()
+    },
+
+    // Background Jobs
+    formatJobDate(dt){if(!dt)return'N/A';const d=new Date(dt);return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})},
+    openJobModal(job){
+      this.editingJob=job||null
+      this.jobForm={
+        title:job?.title||'',
+        description:job?.description||'',
+        job_type:job?.job_type||'custom',
+        cron_expression:job?.cron_expression||'0 9 * * *'
+      }
+      this.showJobModal=true
+    },
+    async saveJob(){
+      if(!this.jobForm.title)return
+      if(this.editingJob){
+        await this.api('PUT',`/api/me/jobs/${this.editingJob.id}`,this.jobForm)
+      }else{
+        await this.api('POST','/api/me/jobs',this.jobForm)
+      }
+      this.showJobModal=false;this.editingJob=null;await this.fetchData()
+    },
+    async toggleJob(job){
+      await this.api('PUT',`/api/me/jobs/${job.id}`,{is_enabled:!job.is_enabled})
+      job.is_enabled=!job.is_enabled
+    },
+    async deleteJob(id){
+      if(!confirm('Delete this background job?'))return
+      await this.api('DELETE',`/api/me/jobs/${id}`)
+      await this.fetchData()
     },
   },
   mounted(){this.fetchData()}
@@ -333,4 +645,43 @@ main{max-width:960px;margin:0 auto;padding:20px}
 .modal input,.modal textarea{width:100%;padding:10px;margin:8px 0;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box}
 .modal textarea{resize:vertical}
 .modal-row{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+
+/* Ideas */
+.idea-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.idea-card{background:#fff;border-radius:10px;padding:16px;cursor:pointer;transition:box-shadow .15s}
+.idea-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.idea-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:8px}
+.idea-header strong{font-size:15px;flex:1}
+.badge-status{font-size:11px;padding:3px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.badge-brainstorm{background:#e3f2fd;color:#1976d2}
+.badge-developing{background:#f3e5f5;color:#7b1fa2}
+.badge-ready{background:#e8f5e9;color:#388e3c}
+.badge-archived{background:#e0e0e0;color:#616161}
+.idea-content{font-size:13px;color:#666;margin:8px 0;line-height:1.4;min-height:40px}
+.idea-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid #f0f0f0}
+.idea-tags{font-size:11px;color:#999;font-style:italic}
+
+/* Events */
+.event-item{display:flex;align-items:center;gap:12px}
+.event-date{font-size:12px;font-weight:600;color:#6C5CE7;white-space:nowrap}
+
+/* Jobs */
+.jobs-table{background:#fff;border-radius:10px;overflow:hidden}
+.job-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #f0f0f0}
+.job-row:last-child{border-bottom:none}
+.job-header{background:#f8f9fa;font-weight:600;font-size:13px;color:#666}
+.toggle{position:relative;display:inline-block;width:40px;height:20px;cursor:pointer}
+.toggle input{display:none}
+.toggle-slider{position:absolute;top:0;left:0;right:0;bottom:0;background:#ccc;border-radius:20px;transition:.3s}
+.toggle-slider:before{content:'';position:absolute;height:14px;width:14px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+.toggle input:checked+.toggle-slider{background:#6C5CE7}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px)}
+
+/* Dashboard Widgets */
+.widget-list{background:#fff;border-radius:10px;overflow:hidden}
+.widget-item{padding:12px 16px;border-bottom:1px solid #f5f5f7;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}
+.widget-item:hover{background:#f8f9fa}
+.widget-item:last-child{border-bottom:none}
+.empty-widget{color:#999;font-size:14px;text-align:center;padding:20px;background:#fff;border-radius:10px}
+.warning-box{background:#fff3cd;color:#856404;padding:12px 16px;border-radius:10px;margin-top:16px;border-left:4px solid #ffc107}
 </style>

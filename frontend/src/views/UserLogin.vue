@@ -13,7 +13,30 @@
 export default {
   data(){return{email:'',password:'',msg:''}},
   methods:{
+    validateEmail(email) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      return re.test(email)
+    },
     async login(){
+      // Clear previous messages
+      this.msg = ''
+
+      // Validate email
+      if (!this.email) {
+        this.msg = '❌ Email is required'
+        return
+      }
+      if (!this.validateEmail(this.email)) {
+        this.msg = '❌ Please enter a valid email address'
+        return
+      }
+
+      // Validate password
+      if (!this.password) {
+        this.msg = '❌ Password is required'
+        return
+      }
+
       try{
         const r=await fetch('/api/auth/user/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:this.email,password:this.password})})
         const d=await r.json()
