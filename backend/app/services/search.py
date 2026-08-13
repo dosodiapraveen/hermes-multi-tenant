@@ -155,7 +155,12 @@ async def search_user_data(uid: str, query: str, limit: int = 8) -> dict:
 
         scored = []
         for row in rows:
-            vec = json.loads(row[4])
+            embed_col = row[4]
+            # asyncpg auto-decodes JSONB to a Python list; guard for str too
+            if isinstance(embed_col, str):
+                vec = json.loads(embed_col)
+            else:
+                vec = embed_col or []
             score = _cosine(qvec, vec)
             scored.append({
                 "type": row[0], "id": row[1], "title": row[2],
