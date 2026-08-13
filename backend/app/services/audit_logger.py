@@ -90,7 +90,6 @@ class AuditLogger:
         """
         # Log to structured logs for real-time monitoring
         log_data = {
-            "event": event_type,
             "severity": severity,
         }
 
@@ -107,13 +106,13 @@ class AuditLogger:
 
         # Use appropriate log level based on severity
         if severity == AuditLogger.Severity.CRITICAL:
-            logger.critical("audit_event", **log_data)
+            logger.critical("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         elif severity == AuditLogger.Severity.ERROR:
-            logger.error("audit_event", **log_data)
+            logger.error("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         elif severity == AuditLogger.Severity.WARNING:
-            logger.warning("audit_event", **log_data)
+            logger.warning("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         else:
-            logger.info("audit_event", **log_data)
+            logger.info("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
 
         # Persist to database for long-term audit trail
         try:
