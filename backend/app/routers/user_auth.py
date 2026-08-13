@@ -45,113 +45,110 @@ async def send_email(to: str, subject: str, html: str):
             logger.info("email_sent_successfully", subject=subject, recipient=to)
 
 @router.post("/register")
-@limiter.limit("3/minute")
+@limiter.limit("5/hour")
 async def register(request: Request, body: dict):
+    """Public registration -> creates a PENDING request an admin must approve.
+    Email verification is required before approval (enforced in the approve endpoint)."""
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
-    profile_id = body.get("profile_id") or ""
+    full_name = (body.get("full_name") or "").strip()[:120]
+    agent_name = (body.get("agent_name") or "").strip()[:120]
+    use_case = (body.get("use_case") or "").strip()[:500]
 
-    # Get client info for audit logging
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
                 (request.client.host if request.client else "unknown")
     request_id = getattr(request.state, "request_id", None)
 
     if not email or not password:
-        logger.warning("registration_missing_fields", has_email=bool(email), has_password=bool(password))
         raise HTTPException(400, "email and password required")
-
     if len(password) < 12:
-        logger.warning("registration_weak_password", email=email, reason="too_short")
         raise HTTPException(400, "Password must be at least 12 characters")
-    if not any(c.isupper() for c in password):
-        logger.warning("registration_weak_password", email=email, reason="no_uppercase")
-        raise HTTPException(400, "Password must contain at least one uppercase letter")
-    if not any(c.islower() for c in password):
-        logger.warning("registration_weak_password", email=email, reason="no_lowercase")
-        raise HTTPException(400, "Password must contain at least one lowercase letter")
-    if not any(c.isdigit() for c in password):
-        logger.warning("registration_weak_password", email=email, reason="no_digit")
-        raise HTTPException(400, "Password must contain at least one number")
+    if not (any(c.isupper() for c in password) and any(c.islower() for c in password) and any(c.isdigit() for c in password)):
+        raise HTTPException(400, "Password must include uppercase, lowercase, and a number")
 
     async with async_session_factory() as db:
-        # Verify the profile_id exists in user_profiles (only claimed agents)
-        if profile_id:
-            r = await db.execute(text("SELECT id, agent_name FROM user_profiles WHERE id::text=:p"), {"p": profile_id})
-            profile = r.fetchone()
-            if not profile:
-                logger.warning("registration_invalid_profile", email=email, profile_id=profile_id)
-                raise HTTPException(404, "Agent profile not found. You need an invitation link to register.")
-        else:
-            logger.warning("registration_no_profile", email=email)
-            raise HTTPException(400, "Registration requires an agent profile link. Contact your admin.")
-
-        # Check email not already used
-        existing = await db.execute(text("SELECT id FROM user_accounts WHERE email=:e"), {"e": email})
-        if existing.fetchone():
-            logger.warning("registration_email_exists", email=email)
-            raise HTTPException(409, "Email already registered")
+        r = await db.execute(text(
+            "SELECT id FROM registration_requests WHERE email=:e AND status IN ('pending','approved')"
+        ), {"e": email})
+        if r.fetchone():
+            raise HTTPException(409, "A request for this email is already pending or approved.")
 
         pw_hash = hash_password(password)
         vtoken = generate_token()
         expires = datetime.utcnow() + timedelta(hours=24)
-        await db.execute(
-            text("INSERT INTO user_accounts (user_profile_id, email, password_hash, verification_token, verification_expires) VALUES (:p, :e, :h, :t, :ex)"),
-            {"p": profile_id, "e": email, "h": pw_hash, "t": vtoken, "ex": expires},
-        )
+        await db.execute(text("""
+            INSERT INTO registration_requests
+              (email, password_hash, full_name, agent_name, use_case,
+               status, email_verified, verification_token, verification_expires)
+            VALUES
+              (:e, :h, :n, :a, :u, 'pending', false, :t, :ex)
+        """), {"e": email, "h": pw_hash, "n": full_name, "a": agent_name,
+               "u": use_case, "t": vtoken, "ex": expires})
         await db.commit()
 
-    # Log successful registration
     await audit_logger.log_event(
-        event_type=AuditLogger.EventType.REGISTRATION,
-        severity=AuditLogger.Severity.INFO,
-        user_id=profile_id,
-        ip_address=client_ip,
-        request_id=request_id,
+        event_type="REGISTRATION_SUBMITTED", severity=AuditLogger.Severity.INFO,
+        ip_address=client_ip, request_id=request_id,
         details={"email": email},
     )
-    logger.info("user_registered", email=email, profile_id=profile_id)
+    logger.info("registration_request_submitted", email=email)
 
-    # Try email, but always show the verification link so user isn't stuck
     try:
-        link = f"{FRONTEND_URL}/user/verify?token={vtoken}"
-        html = f"""<h2>Welcome, {profile[1]}!</h2><p>Click below to verify your email:</p><a href="{link}">Verify Email</a><p>Link expires in 24 hours.</p>"""
+        link = f"{FRONTEND_URL}/user/register/verify?token={vtoken}"
+        html = f"""<h2>Verify your email</h2>
+<p>Hi{f' {full_name}' if full_name else ''},</p>
+<p>Please verify your email address to submit your registration for admin review.</p>
+<a href="{link}" style="background:#6C5CE7;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none">Verify Email</a>
+<p style="color:#888;font-size:13px">Link expires in 24 hours. This only proves you control this email; an admin must still approve your request.</p>"""
         await send_email(email, "Verify your email", html)
         sent = True
     except Exception as e:
-        logger.warning("registration_email_failed", email=email, error=str(e))
+        logger.warning("registration_verify_email_failed", email=email, error=str(e))
         sent = False
 
-    return {"status": "registered", "message": "Verification email sent" if sent else "Verification pending", "verify_link": f"{FRONTEND_URL}/user/verify?token={vtoken}"}
+    return {"status": "pending",
+            "message": ("Verification email sent! Confirm it, then an admin reviews your request." if sent else "Verification pending"),
+            "verify_link": f"{FRONTEND_URL}/user/register/verify?token={vtoken}"}
 
-@router.get("/verify")
-async def verify(token: str = ""):
+
+@router.get("/register/verify")
+async def register_verify(token: str = ""):
+    """Verify the email on a pending registration request. Only verified
+    requests are eligible for admin approval."""
     if not token:
-        logger.warning("email_verification_missing_token")
         raise HTTPException(400, "Token required")
 
     async with async_session_factory() as db:
-        r = await db.execute(
-            text("SELECT id, user_profile_id, email FROM user_accounts WHERE verification_token=:t AND verification_expires > NOW() AND email_verified=false"),
-            {"t": token},
-        )
+        r = await db.execute(text("""
+            SELECT id, email, full_name, agent_name FROM registration_requests
+            WHERE verification_token=:t AND verification_expires > NOW() AND email_verified=false
+        """), {"t": token})
         u = r.fetchone()
         if not u:
-            logger.warning("email_verification_invalid_token", token_prefix=token[:8])
-            raise HTTPException(400, "Invalid or expired token")
+            raise HTTPException(400, "Invalid or expired verification token")
 
-        await db.execute(text("UPDATE user_accounts SET email_verified=true, verification_token=NULL WHERE id=:id"), {"id": u[0]})
+        await db.execute(text("""
+            UPDATE registration_requests SET email_verified=true, verification_token=NULL WHERE id=:id
+        """), {"id": u[0]})
         await db.commit()
+        req_id, email, full_name, agent_name = str(u[0]), u[1], u[2] or "", u[3] or ""
 
-    # Log successful email verification
     await audit_logger.log_event(
-        event_type=AuditLogger.EventType.EMAIL_VERIFICATION,
-        severity=AuditLogger.Severity.INFO,
-        user_id=str(u[1]),
-        details={"email": u[2]},
+        event_type="REGISTRATION_EMAIL_VERIFIED", severity=AuditLogger.Severity.INFO,
+        user_id=req_id, details={"email": email},
     )
-    logger.info("email_verified", user_id=str(u[1]), email=u[2])
+    logger.info("registration_email_verified", email=email)
 
-    return {"status": "verified"}
+    # Notify admin so they can review + approve.
+    try:
+        from app.services.admin_notify import notify_admin_new_registration
+        await notify_admin_new_registration(email=email, full_name=full_name, agent_name=agent_name)
+    except Exception as e:
+        logger.warning("admin_notify_failed", error=str(e))
+
+    return {"status": "verified",
+            "message": f"Email verified{f', {full_name}' if full_name else ''}! Your request is now with an admin for review. We'll email you once approved."}
+
 
 @router.post("/login")
 @limiter.limit("5/minute")

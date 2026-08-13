@@ -12,7 +12,7 @@
     <div class="auth-card">
       <div class="auth-card-header">
         <h1>Create your account</h1>
-        <p class="subtitle">Link your email to your agent account</p>
+        <p class="subtitle">Request an AI agent — an admin reviews and approves your account</p>
       </div>
 
       <!-- Error/Success Alert -->
@@ -39,28 +39,37 @@
       </div>
 
       <form @submit.prevent="register" class="auth-form">
-        <!-- Agent ID Input (conditionally shown) -->
-        <div v-if="!autoProfile" class="input-group">
-          <label for="agent-id">Agent ID</label>
-          <div class="input-wrapper" :class="{ 'has-error': agentIdError, 'focused': agentIdFocused }">
-            <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-            </svg>
-            <input
-              id="agent-id"
-              v-model="manual_profile_id"
-              type="text"
-              placeholder="Your agent profile ID"
-              @focus="agentIdFocused = true"
-              @blur="agentIdFocused = false; validateAgentIdField()"
-              @input="agentIdError = ''"
-            />
+        <!-- Full Name -->
+        <div class="input-group">
+          <label for="full-name">Your name</label>
+          <div class="input-wrapper" :class="{ 'has-error': fullNameError, 'focused': emailFocused }">
+            <input id="full-name" v-model="full_name" type="text" placeholder="e.g. Sarah Johnson"
+              autocomplete="name" @focus="emailFocused = true" @blur="emailFocused = false; fullNameError = ''" />
           </div>
-          <span v-if="agentIdError" class="input-error">{{ agentIdError }}</span>
-          <span v-else class="input-hint">Your agent ID is shared by your admin via invite link</span>
+          <span v-if="fullNameError" class="input-error">{{ fullNameError }}</span>
         </div>
 
-        <!-- Email Input -->
+        <!-- Desired Agent Name -->
+        <div class="input-group">
+          <label for="agent-name">Preferred agent name</label>
+          <div class="input-wrapper" :class="{ 'has-error': agentNameError, 'focused': passwordFocused }">
+            <input id="agent-name" v-model="agent_name" type="text" placeholder="e.g. Research Assistant"
+              @focus="passwordFocused = true" @blur="passwordFocused = false; agentNameError = ''" />
+          </div>
+          <span v-if="agentNameError" class="input-error">{{ agentNameError }}</span>
+          <span class="input-hint">A name for the AI assistant an admin will assign to you</span>
+        </div>
+
+        <!-- Use Case -->
+        <div class="input-group">
+          <label for="use-case">What will you use it for?</label>
+          <div class="input-wrapper">
+            <textarea id="use-case" v-model="use_case" rows="2" placeholder="e.g. Research, notes, reminders for my consulting work"
+              class="no-icon"></textarea>
+          </div>
+        </div>
+
+        <!-- Email Input --><!-- Email Input -->
         <div class="input-group">
           <label for="email">Email address</label>
           <div class="input-wrapper" :class="{ 'has-error': emailError, 'focused': emailFocused }">
@@ -188,17 +197,18 @@ export default {
     return {
       email: '',
       password: '',
-      manual_profile_id: '',
+      full_name: '',
+      agent_name: '',
+      use_case: '',
       msg: '',
       msgType: 'error',
       verifyLink: '',
-      autoProfile: false,
       emailError: '',
       passwordError: '',
-      agentIdError: '',
+      fullNameError: '',
+      agentNameError: '',
       emailFocused: false,
       passwordFocused: false,
-      agentIdFocused: false,
       showPassword: false,
       loading: false,
       passwordChecks: {
@@ -207,13 +217,6 @@ export default {
         lowercase: false,
         number: false
       }
-    }
-  },
-  mounted() {
-    const urlToken = new URLSearchParams(location.search).get('token')
-    if (urlToken) {
-      this.manual_profile_id = urlToken
-      this.autoProfile = true
     }
   },
   methods: {
@@ -253,14 +256,6 @@ export default {
       this.passwordError = ''
       return true
     },
-    validateAgentIdField() {
-      if (!this.manual_profile_id) {
-        this.agentIdError = 'Agent ID is required'
-        return false
-      }
-      this.agentIdError = ''
-      return true
-    },
     onPasswordInput() {
       this.passwordError = ''
       // Update password checks
@@ -274,43 +269,35 @@ export default {
       this.msgType = 'error'
       this.verifyLink = ''
 
-      // Validate all fields
-      const agentIdValid = this.autoProfile || this.validateAgentIdField()
       const emailValid = this.validateEmailField()
       const passwordValid = this.validatePasswordField()
-
-      if (!agentIdValid || !emailValid || !passwordValid) {
+      if (!this.full_name.trim()) this.fullNameError = 'Please enter your name'
+      if (!emailValid || !passwordValid) {
         return
       }
 
       this.loading = true
 
       try {
-        const profile_id = this.manual_profile_id
         const r = await fetch('/api/auth/user/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             email: this.email,
             password: this.password,
-            profile_id
+            full_name: this.full_name,
+            agent_name: this.agent_name,
+            use_case: this.use_case
           })
         })
         const d = await r.json()
 
         if (r.ok) {
           this.msgType = 'success'
-          this.msg = d.message || 'Account created! Please check your email to verify.'
+          this.msg = d.message || 'Request submitted! Check your email to verify.'
           if (d.verify_link) this.verifyLink = d.verify_link
-
-          // Clear form on success
           this.password = ''
-          this.passwordChecks = {
-            length: false,
-            uppercase: false,
-            lowercase: false,
-            number: false
-          }
+          this.passwordChecks = { length: false, uppercase: false, lowercase: false, number: false }
         } else {
           this.msgType = 'error'
           this.msg = d.detail || 'Registration failed. Please try again.'
@@ -322,6 +309,7 @@ export default {
         this.loading = false
       }
     }
+
   }
 }
 </script>

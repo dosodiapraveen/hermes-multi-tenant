@@ -15,6 +15,7 @@ import UserLogin from './views/UserLogin.vue'
 import UserForgot from './views/UserForgot.vue'
 import UserReset from './views/UserReset.vue'
 import UserVerify from './views/UserVerify.vue'
+import RegistrationRequests from './views/RegistrationRequests.vue'
 import Settings from './views/Settings.vue'
 
 const routes = [
@@ -33,6 +34,7 @@ const routes = [
   { path: '/user/forgot', name: 'UserForgot', component: UserForgot, meta: { public: true } },
   { path: '/user/reset', name: 'UserReset', component: UserReset, meta: { public: true } },
   { path: '/user/verify', name: 'UserVerify', component: UserVerify, meta: { public: true } },
+  { path: '/registration-requests', name: 'RegistrationRequests', component: RegistrationRequests, meta: { requiresAuth: true } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAuth: true } },
 ]
 

@@ -264,6 +264,188 @@ async def delete_invite(invite_id: str, db: AsyncSession = Depends(get_db)):
     return {"status": "deleted", "id": invite_id}
 
 # ═══════════════════════════════════════════
+# Registration Requests (admin approval flow)
+# ═══════════════════════════════════════════
+
+@router.get("/registration-requests")
+async def list_registration_requests(status: str = "pending", db: AsyncSession = Depends(get_db)):
+    """List registration requests. By default shows pending. Only requests with a
+    verified email are approvable (enforced again in the approve endpoint)."""
+    allowed = {"pending", "approved", "rejected", "all"}
+    flt = status if status in allowed and status != "all" else None
+    if flt:
+        r = await db.execute(text("""
+            SELECT id, email, full_name, agent_name, use_case, plan_requested,
+                   status, email_verified, created_at, reviewed_at, review_note,
+                   assigned_profile_id
+            FROM registration_requests WHERE status=:s ORDER BY created_at DESC
+        """), {"s": flt})
+    else:
+        r = await db.execute(text("""
+            SELECT id, email, full_name, agent_name, use_case, plan_requested,
+                   status, email_verified, created_at, reviewed_at, review_note,
+                   assigned_profile_id
+            FROM registration_requests ORDER BY created_at DESC
+        """))
+    return [{
+        "id": str(row[0]), "email": row[1], "full_name": row[2], "agent_name": row[3],
+        "use_case": row[4], "plan_requested": row[5], "status": row[6],
+        "email_verified": row[7], "created_at": row[8].isoformat() if row[8] else None,
+        "reviewed_at": row[9].isoformat() if row[9] else None, "review_note": row[10],
+        "assigned_profile_id": str(row[11]) if row[11] else None,
+    } for row in r.fetchall()]
+
+
+@router.post("/registration-requests/{req_id}/approve")
+async def approve_registration(req_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db)):
+    """Approve a registration request: create the agent + login account, generate a
+    Telegram activation link, and email the user with access details.
+    SECURITY: only requests with status='pending' AND email_verified=true can be
+    approved — an admin must never approve an email that wasn't verified."""
+    request_id = getattr(body, "request_id", None)  # body used for JSON payload
+
+    r = await db.execute(text("""
+        SELECT id, email, password_hash, full_name, agent_name, use_case,
+               plan_requested, status, email_verified
+        FROM registration_requests WHERE id::text=:id
+    """), {"id": req_id})
+    req = r.fetchone()
+    if not req:
+        raise HTTPException(404, "Registration request not found")
+    if req[7] != "pending":
+        raise HTTPException(409, f"Request is already {req[7]}. Only pending requests can be approved.")
+    if not req[8]:
+        raise HTTPException(400, "Email not verified. Approval requires a verified email (security requirement).")
+    if req[7] == "approved":
+        raise HTTPException(409, "Request already approved")
+
+    email, pw_hash, full_name = req[1], req[2], req[3] or ""
+    submitted_agent_name = req[4] or ""
+    plan = req[6] or "pro"
+
+    # Admin-chosen overrides (default to submitted details)
+    agent_name = (body.get("agent_name") or submitted_agent_name or "My Assistant").strip()
+    final_plan = (body.get("plan") or plan or "pro").strip()
+    is_vip = final_plan == "vip"
+    if final_plan not in ("trial", "basic", "pro", "business", "vip"):
+        raise HTTPException(400, "Invalid plan. Must be one of trial/basic/pro/business/vip.")
+
+    # ── 1. Create agent (user_profiles + isolated Hermes profile + vault) ──
+    rr = await db.execute(text("""
+        INSERT INTO user_profiles (agent_name, plan, is_vip,
+            primary_model, backup_model)
+        VALUES (:a, :p, :v,
+            'accounts/fireworks/models/deepseek-v4-flash-0731',
+            'accounts/fireworks/models/deepseek-v4-flash-0731')
+        RETURNING id
+    """), {"a": agent_name, "p": final_plan, "v": is_vip})
+    uid = str(rr.fetchone()[0])
+
+    try:
+        profile = init_user_profile(user_id=uid, agent_name=agent_name, plan=final_plan, is_vip=is_vip)
+        await db.execute(text("UPDATE user_profiles SET profile_path=:pp, updated_at=NOW() WHERE id::text=:uid"),
+                         {"pp": profile["profile_dir"], "uid": uid})
+        profile_status = "created"
+    except Exception as e:
+        profile_status = f"failed: {e}"
+
+    # ── 2. Create login account (uses the password set at registration) ──
+    await db.execute(text("""
+        INSERT INTO user_accounts (user_profile_id, email, password_hash, email_verified)
+        VALUES (:p, :e, :h, true)
+        ON CONFLICT (email) DO NOTHING
+    """), {"p": uid, "e": email, "h": pw_hash})
+
+    # ── 3. Generate one-time Telegram activation link ──
+    tg_code = "link_" + secrets.token_urlsafe(16)
+    await db.execute(text("""
+        INSERT INTO invite_links (code, label, agent_name, plan, trial_days, claimed_by)
+        VALUES (:c, :l, :a, 'pro', 0, :uid)
+    """), {"c": tg_code, "l": f"Activation {email}", "a": agent_name, "uid": uid})
+
+    # ── 4. Mark request approved + store activation token ──
+    act_token = secrets.token_urlsafe(32)
+    act_expires = datetime.utcnow() + timedelta(days=3)
+    await db.execute(text("""
+        UPDATE registration_requests
+        SET status='approved', assigned_profile_id=:pid,
+            activation_token=:at, activation_expires=:ax,
+            review_note=:rn, reviewed_at=NOW()
+        WHERE id=:id
+    """), {"pid": uid, "at": act_token, "ax": act_expires,
+           "rn": (body.get("review_note") or "")[:500], "id": req_id})
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:u, 'registration_approved', :d)"),
+                     {"u": uid, "d": f'{{"email":"{email}","plan":"{final_plan}"}}'})
+    await db.commit()
+
+    # ── 5. Email the user with agent activation + dashboard access ──
+    tg_link = f"https://t.me/BotBePreparedBot?start={tg_code}"
+    dashboard = "https://beprepared.dev/user/login"
+    subject = f"Your agent {agent_name} is ready! 🎉"
+    email_html = f"""<!DOCTYPE html><html><body style="font-family:-apple-system,sans-serif;max-width:560px;margin:40px auto;padding:20px">
+<div style="background:#1A1A2E;border-radius:12px;padding:32px;text-align:center;margin-bottom:24px">
+<h1 style="color:#fff;font-size:22px;margin:0">🎉 You're approved, {full_name or agent_name}!</h1>
+<p style="color:#A29BFE;margin:8px 0 0">Your AI agent <strong>{agent_name}</strong> is ready.</p>
+</div>
+<p style="font-size:15px;color:#333">Tap to connect your Telegram and activate your agent:</p>
+<a href="{tg_link}" style="display:block;background:#6C5CE7;color:#fff;padding:14px 24px;border-radius:8px;text-align:center;text-decoration:none;font-size:16px;margin:16px 0">Connect Telegram & Activate</a>
+<p style="font-size:14px;color:#333"><strong>Dashboard:</strong> <a href="{dashboard}" style="color:#6C5CE7">{dashboard}</a><br>
+Log in with the email and password you registered with.</p>
+<p style="font-size:13px;color:#888;margin-top:24px">Sent by Hermes · beprepared.dev</p>
+</body></html>"""
+    try:
+        from app.services.email import send_email
+        await send_email(email, subject, email_html)
+        email_status = "sent"
+    except Exception as e:
+        email_status = f"failed: {e}"
+
+    return {"status": "approved", "user_id": uid, "agent_name": agent_name,
+            "plan": final_plan, "profile_status": profile_status,
+            "telegram_link": tg_link, "email_status": email_status}
+
+
+@router.post("/registration-requests/{req_id}/reject")
+async def reject_registration(req_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db)):
+    """Reject a pending registration request. Ends the user flow and notifies them."""
+    r = await db.execute(text("SELECT id, email, full_name, status FROM registration_requests WHERE id::text=:id"), {"id": req_id})
+    req = r.fetchone()
+    if not req:
+        raise HTTPException(404, "Registration request not found")
+    if req[3] != "pending":
+        raise HTTPException(409, f"Request is already {req[3]}")
+
+    email, full_name = req[1], req[2] or ""
+    note = (body.get("review_note") or "").strip()[:500]
+
+    await db.execute(text("""
+        UPDATE registration_requests SET status='rejected', review_note=:n, reviewed_at=NOW() WHERE id=:id
+    """), {"n": note, "id": req_id})
+    await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES ('system', 'registration_rejected', :d)"),
+                     {"d": f'{{"email":"{email}"}}'})
+    await db.commit()
+
+    # Notify the user their request was declined.
+    try:
+        from app.services.email import send_email
+        note_html = f"<p>Reason: {note}</p>" if note else ""
+        await send_email(email, "Update on your registration", f"""<h2>Registration update</h2>
+<p>We're sorry — your request{f' {full_name}' if full_name else ''} was not approved at this time.</p>
+{note_html}
+<p>If you believe this is a mistake, please contact the administrator.</p>""")
+    except Exception:
+        pass
+
+    try:
+        from app.services.admin_notify import notify_admin_rejected
+        await notify_admin_rejected(email)
+    except Exception:
+        pass
+
+    return {"status": "rejected", "email": email}
+
+
+# ═══════════════════════════════════════════
 # Global Model Config
 # ═══════════════════════════════════════════
 
