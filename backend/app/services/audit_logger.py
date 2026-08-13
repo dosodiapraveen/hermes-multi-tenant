@@ -106,13 +106,13 @@ class AuditLogger:
 
         # Use appropriate log level based on severity
         if severity == AuditLogger.Severity.CRITICAL:
-            logger.critical("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
+            logger.critical("audit_event", severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         elif severity == AuditLogger.Severity.ERROR:
-            logger.error("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
+            logger.error("audit_event", severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         elif severity == AuditLogger.Severity.WARNING:
-            logger.warning("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
+            logger.warning("audit_event", severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
         else:
-            logger.info("audit_event", event=event_type, severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
+            logger.info("audit_event", severity=severity, **{k:v for k,v in log_data.items() if k not in ["event","severity"]})
 
         # Persist to database for long-term audit trail
         try:
