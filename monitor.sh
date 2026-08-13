@@ -44,8 +44,11 @@ else
 fi
 
 if [ "$1" = "daily" ]; then
+    # Purge expired registration requests + expired verification/reset tokens
+    docker exec hermes-multi-tenant-postgres-1 psql -U hermes -tAc "DELETE FROM registration_requests WHERE expires_at < NOW(); DELETE FROM invite_links WHERE expires_at IS NOT NULL AND expires_at < NOW();" > /dev/null 2>&1
     u=$(docker exec hermes-multi-tenant-postgres-1 psql -U hermes -tAc "SELECT count(*) FROM user_profiles")
     a=$(docker exec hermes-multi-tenant-postgres-1 psql -U hermes -tAc "SELECT count(*) FROM user_profiles WHERE is_active=true")
-    msg="<b>Daily Report</b>%0AUsers: $u%0AActive: $a"
+    p=$(docker exec hermes-multi-tenant-postgres-1 psql -U hermes -tAc "SELECT count(*) FROM registration_requests WHERE status='pending'")
+    msg="<b>Daily Report</b>%0AUsers: $u%0AActive: $a%0APending regs: $p"
     alert "$msg"
 fi

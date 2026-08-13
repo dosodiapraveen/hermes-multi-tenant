@@ -67,23 +67,37 @@ async def register(request: Request, body: dict):
         raise HTTPException(400, "Password must include uppercase, lowercase, and a number")
 
     async with async_session_factory() as db:
+        now = datetime.utcnow()
+
+        # ── Lifecycle guard 1: purge any expired requests (queue can't grow forever)
+        await db.execute(text("DELETE FROM registration_requests WHERE expires_at < :now"), {"now": now})
+
+        # ── Lifecycle guard 2: per-email rate limit (max 3 requests / 24h)
+        recent = await db.execute(text(
+            "SELECT COUNT(*) FROM registration_requests WHERE email=:e AND created_at > :cutoff"
+        ), {"e": email, "cutoff": now - timedelta(hours=24)})
+        if (recent.fetchone()[0] or 0) >= 3:
+            raise HTTPException(429, "Too many registration attempts for this email. Please wait and try again later.")
+
+        # ── Guard 3: block only if an ACTIVE (unexpired) pending/approved request exists
         r = await db.execute(text(
-            "SELECT id FROM registration_requests WHERE email=:e AND status IN ('pending','approved')"
-        ), {"e": email})
+            "SELECT id FROM registration_requests WHERE email=:e AND status IN ('pending','approved') AND expires_at > :now"
+        ), {"e": email, "now": now})
         if r.fetchone():
             raise HTTPException(409, "A request for this email is already pending or approved.")
 
         pw_hash = hash_password(password)
         vtoken = generate_token()
-        expires = datetime.utcnow() + timedelta(hours=24)
+        verify_expires = now + timedelta(hours=24)
+        req_expires = now + timedelta(hours=72)
         await db.execute(text("""
             INSERT INTO registration_requests
               (email, password_hash, full_name, agent_name, use_case,
-               status, email_verified, verification_token, verification_expires)
+               status, email_verified, verification_token, verification_expires, expires_at)
             VALUES
-              (:e, :h, :n, :a, :u, 'pending', false, :t, :ex)
+              (:e, :h, :n, :a, :u, 'pending', false, :t, :vex, :rex)
         """), {"e": email, "h": pw_hash, "n": full_name, "a": agent_name,
-               "u": use_case, "t": vtoken, "ex": expires})
+               "u": use_case, "t": vtoken, "vex": verify_expires, "rex": req_expires})
         await db.commit()
 
     await audit_logger.log_event(
