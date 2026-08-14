@@ -291,7 +291,7 @@ async def register_verify(token: str = ""):
 
 @router.get("/register/status")
 @limiter.limit("10/hour")
-async def registration_status(email: str = ""):
+async def registration_status(request: Request, email: str = ""):
     """Check registration status without revealing if email exists.
 
     UX IMPROVEMENT: Lets users track approval progress.
