@@ -1,28 +1,62 @@
-"""User portal API — full CRUD for notes, projects, reminders, activity."""
+"""User portal API — full CRUD for notes, projects, reminders, activity.
+
+SECURITY IMPROVEMENTS:
+- Session expiration validation
+- CSRF protection on state-changing operations
+- Rate limiting on expensive operations
+- Uses dedicated session_token instead of verification_token
+"""
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import text
 from app.database import async_session_factory
+from app.csrf import require_csrf
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from pathlib import Path
 from datetime import datetime
 import json
 
 router = APIRouter(prefix="/api/me", tags=["portal"])
+limiter = Limiter(key_func=get_remote_address)
 
 OBSIDIAN_ROOT = Path("/opt/hermes/obsidian")
 
 async def resolve_user(request: Request) -> dict:
-    auth = request.headers.get("Authorization", "")
-    token = auth.replace("Bearer ", "").strip()
+    """Resolve user from session token with expiration validation.
+
+    SECURITY: Uses dedicated session_token with expiration check.
+    Supports both cookie and Authorization header for backward compatibility.
+    """
+    # Try cookie first (new method)
+    token = request.cookies.get("portal_token")
+
+    # Fall back to Authorization header (backward compatibility)
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        token = auth.replace("Bearer ", "").strip()
+
     if not token:
         raise HTTPException(401, "Missing auth token")
+
     async with async_session_factory() as db:
-        r = await db.execute(
-            text("SELECT ua.user_profile_id, up.agent_name FROM user_accounts ua JOIN user_profiles up ON up.id=ua.user_profile_id WHERE ua.verification_token=:t AND ua.email_verified=true"),
-            {"t": token},
-        )
+        # SECURITY FIX: Check session_token with expiration
+        r = await db.execute(text("""
+            SELECT ua.user_profile_id, up.agent_name, up.is_active
+            FROM user_accounts ua
+            JOIN user_profiles up ON up.id = ua.user_profile_id
+            WHERE ua.session_token=:t
+              AND ua.session_expires > NOW()
+              AND ua.email_verified=true
+        """), {"t": token})
         u = r.fetchone()
+
         if not u:
-            raise HTTPException(401, "Invalid or expired token")
+            raise HTTPException(401, "Invalid or expired session. Please login again.")
+
+        # Check account is active
+        if not u[2]:
+            raise HTTPException(403, "Account disabled. Please contact support.")
+
         return {"id": str(u[0]), "name": u[1]}
 
 # ═══════════════════════════ NOTES ═══════════════════════════
@@ -45,8 +79,8 @@ async def list_notes(user: dict = Depends(resolve_user)):
             vault_notes.append({"id": f"vault_{f.name}", "title": title, "content": text_content[:300], "category": "Vault", "updated_at": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")})
     return {"notes": notes + vault_notes, "user": user["name"]}
 
-@router.post("/notes")
-async def create_note(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/notes", dependencies=[Depends(require_csrf)])
+async def create_note(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     content = (body.get("content") or "").strip()
     category = (body.get("category") or "General").strip()
@@ -61,8 +95,8 @@ async def create_note(body: dict, user: dict = Depends(resolve_user)):
         row = r.fetchone()
         return {"id": str(row[0]), "title": title, "content": content, "category": category, "created_at": str(row[1])[:19]}
 
-@router.put("/notes/{note_id}")
-async def update_note(note_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/notes/{note_id}", dependencies=[Depends(require_csrf)])
+async def update_note(request: Request, note_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM notes WHERE id::text=:n AND user_id::text=:u"), {"n": note_id, "u": user["id"]})
         if not r.fetchone():
@@ -78,8 +112,8 @@ async def update_note(note_id: str, body: dict, user: dict = Depends(resolve_use
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/notes/{note_id}")
-async def delete_note(note_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/notes/{note_id}", dependencies=[Depends(require_csrf)])
+async def delete_note(request: Request, note_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM notes WHERE id::text=:n AND user_id::text=:u"), {"n": note_id, "u": user["id"]})
         await db.commit()
@@ -97,8 +131,8 @@ async def list_projects(user: dict = Depends(resolve_user)):
         projects = [{"id": str(row[0]), "title": row[1], "description": row[2], "status": row[3], "updated_at": str(row[4])[:19] if row[4] else ""} for row in r.fetchall()]
     return {"projects": projects}
 
-@router.post("/projects")
-async def create_project(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/projects", dependencies=[Depends(require_csrf)])
+async def create_project(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     description = (body.get("description") or "").strip()
     if not title:
@@ -130,8 +164,8 @@ async def get_project(project_id: str, user: dict = Depends(resolve_user)):
             "research": research,
         }
 
-@router.put("/projects/{project_id}")
-async def update_project(project_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/projects/{project_id}", dependencies=[Depends(require_csrf)])
+async def update_project(request: Request, project_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": project_id, "u": user["id"]})
         if not r.fetchone(): raise HTTPException(404, "Project not found")
@@ -144,15 +178,15 @@ async def update_project(project_id: str, body: dict, user: dict = Depends(resol
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/projects/{project_id}")
-async def delete_project(project_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/projects/{project_id}", dependencies=[Depends(require_csrf)])
+async def delete_project(request: Request, project_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": project_id, "u": user["id"]})
         await db.commit()
     return {"status": "deleted"}
 
-@router.post("/projects/{project_id}/research")
-async def add_research(project_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.post("/projects/{project_id}/research", dependencies=[Depends(require_csrf)])
+async def add_research(request: Request, project_id: str, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     content = (body.get("content") or "").strip()
     if not title: raise HTTPException(400, "Title required")
@@ -170,8 +204,8 @@ async def add_research(project_id: str, body: dict, user: dict = Depends(resolve
         row = rr.fetchone()
         return {"id": str(row[0]), "title": title, "content": content, "created_at": str(row[1])[:19]}
 
-@router.delete("/projects/{project_id}/research/{research_id}")
-async def delete_research(project_id: str, research_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/projects/{project_id}/research/{research_id}", dependencies=[Depends(require_csrf)])
+async def delete_research(request: Request, project_id: str, research_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM project_research WHERE id::text=:r AND project_id::text=:p"), {"r": research_id, "p": project_id})
         await db.commit()
@@ -183,7 +217,8 @@ async def delete_research(project_id: str, research_id: str, user: dict = Depend
 # ═══════════════════════════ SEMANTIC SEARCH ═══════════════════════════
 
 @router.get("/search")
-async def search_data(q: str = "", limit: int = 8, user: dict = Depends(resolve_user)):
+@limiter.limit("20/minute")
+async def search_data(request: Request, q: str = "", limit: int = 8, user: dict = Depends(resolve_user)):
     """Semantic search across the user's notes, projects, research, ideas,
     reminders, and vault. Auto-indexes on first use."""
     from app.services.search import search_user_data
@@ -192,8 +227,9 @@ async def search_data(q: str = "", limit: int = 8, user: dict = Depends(resolve_
     return await search_user_data(user["id"], q.strip(), min(limit, 25))
 
 
-@router.post("/search/index")
-async def reindex_data(user: dict = Depends(resolve_user)):
+@router.post("/search/index", dependencies=[Depends(require_csrf)])
+@limiter.limit("3/hour")
+async def reindex_data(request: Request, user: dict = Depends(resolve_user)):
     """(Re)index all of the user's data into embeddings."""
     from app.services.search import index_user_data
     try:
@@ -221,8 +257,8 @@ async def list_reminders(user: dict = Depends(resolve_user)):
         ]
     return {"reminders": reminders}
 
-@router.post("/reminders")
-async def create_reminder(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/reminders", dependencies=[Depends(require_csrf)])
+async def create_reminder(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     remind_at = (body.get("remind_at") or "").strip()
     done = body.get("done", False)
@@ -239,8 +275,8 @@ async def create_reminder(body: dict, user: dict = Depends(resolve_user)):
         row = r.fetchone()
         return {"id": str(row[0]), "title": title, "remind_at": remind_at, "done": done, "created_at": str(row[1])[:19]}
 
-@router.put("/reminders/{reminder_id}")
-async def update_reminder(reminder_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/reminders/{reminder_id}", dependencies=[Depends(require_csrf)])
+async def update_reminder(request: Request, reminder_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM reminders WHERE id::text=:r AND user_id::text=:u"), {"r": reminder_id, "u": user["id"]})
         if not r.fetchone():
@@ -256,8 +292,8 @@ async def update_reminder(reminder_id: str, body: dict, user: dict = Depends(res
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/reminders/{reminder_id}")
-async def delete_reminder(reminder_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/reminders/{reminder_id}", dependencies=[Depends(require_csrf)])
+async def delete_reminder(request: Request, reminder_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM reminders WHERE id::text=:r AND user_id::text=:u"), {"r": reminder_id, "u": user["id"]})
         await db.commit()
@@ -307,8 +343,8 @@ async def list_ideas(status: str = None, user: dict = Depends(resolve_user)):
         ]
     return {"ideas": ideas}
 
-@router.post("/ideas")
-async def create_idea(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/ideas", dependencies=[Depends(require_csrf)])
+async def create_idea(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     content = (body.get("content") or "").strip()
     status = (body.get("status") or "brainstorm").strip()
@@ -326,8 +362,8 @@ async def create_idea(body: dict, user: dict = Depends(resolve_user)):
         row = r.fetchone()
         return {"id": str(row[0]), "title": title, "content": content, "status": status, "tags": tags, "created_at": str(row[1])[:19]}
 
-@router.put("/ideas/{idea_id}")
-async def update_idea(idea_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/ideas/{idea_id}", dependencies=[Depends(require_csrf)])
+async def update_idea(request: Request, idea_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM ideas WHERE id::text=:i AND user_id::text=:u"), {"i": idea_id, "u": user["id"]})
         if not r.fetchone():
@@ -344,8 +380,8 @@ async def update_idea(idea_id: str, body: dict, user: dict = Depends(resolve_use
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/ideas/{idea_id}")
-async def delete_idea(idea_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/ideas/{idea_id}", dependencies=[Depends(require_csrf)])
+async def delete_idea(request: Request, idea_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM ideas WHERE id::text=:i AND user_id::text=:u"), {"i": idea_id, "u": user["id"]})
         await db.commit()
@@ -381,8 +417,8 @@ async def list_events(from_date: str = None, to_date: str = None, user: dict = D
         ]
     return {"events": events}
 
-@router.post("/events")
-async def create_event(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/events", dependencies=[Depends(require_csrf)])
+async def create_event(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     description = (body.get("description") or "").strip()
     event_start = (body.get("event_start") or "").strip()
@@ -417,8 +453,8 @@ async def create_event(body: dict, user: dict = Depends(resolve_user)):
             "created_at": str(row[1])[:19]
         }
 
-@router.put("/events/{event_id}")
-async def update_event(event_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/events/{event_id}", dependencies=[Depends(require_csrf)])
+async def update_event(request: Request, event_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM scheduled_events WHERE id::text=:e AND user_id::text=:u"), {"e": event_id, "u": user["id"]})
         if not r.fetchone():
@@ -438,8 +474,8 @@ async def update_event(event_id: str, body: dict, user: dict = Depends(resolve_u
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/events/{event_id}")
-async def delete_event(event_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/events/{event_id}", dependencies=[Depends(require_csrf)])
+async def delete_event(request: Request, event_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM scheduled_events WHERE id::text=:e AND user_id::text=:u"), {"e": event_id, "u": user["id"]})
         await db.commit()
@@ -502,8 +538,8 @@ async def list_jobs(user: dict = Depends(resolve_user)):
         ]
     return {"jobs": jobs}
 
-@router.post("/jobs")
-async def create_job(body: dict, user: dict = Depends(resolve_user)):
+@router.post("/jobs", dependencies=[Depends(require_csrf)])
+async def create_job(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     description = (body.get("description") or "").strip()
     job_type = (body.get("job_type") or "custom").strip()
@@ -534,8 +570,8 @@ async def create_job(body: dict, user: dict = Depends(resolve_user)):
             "created_at": str(row[1])[:19]
         }
 
-@router.put("/jobs/{job_id}")
-async def update_job(job_id: str, body: dict, user: dict = Depends(resolve_user)):
+@router.put("/jobs/{job_id}", dependencies=[Depends(require_csrf)])
+async def update_job(request: Request, job_id: str, body: dict, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(text("SELECT id FROM background_jobs WHERE id::text=:j AND user_id::text=:u"), {"j": job_id, "u": user["id"]})
         if not r.fetchone():
@@ -558,8 +594,8 @@ async def update_job(job_id: str, body: dict, user: dict = Depends(resolve_user)
         await db.commit()
     return {"status": "updated"}
 
-@router.delete("/jobs/{job_id}")
-async def delete_job(job_id: str, user: dict = Depends(resolve_user)):
+@router.delete("/jobs/{job_id}", dependencies=[Depends(require_csrf)])
+async def delete_job(request: Request, job_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         await db.execute(text("DELETE FROM background_jobs WHERE id::text=:j AND user_id::text=:u"), {"j": job_id, "u": user["id"]})
         await db.commit()

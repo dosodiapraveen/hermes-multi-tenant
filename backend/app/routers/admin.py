@@ -298,30 +298,30 @@ async def list_registration_requests(status: str = "pending", db: AsyncSession =
 
 @router.post("/registration-requests/{req_id}/approve")
 async def approve_registration(req_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db)):
-    """Approve a registration request: create the agent + login account, generate a
-    Telegram activation link, and email the user with access details.
-    SECURITY: only requests with status='pending' AND email_verified=true can be
-    approved — an admin must never approve an email that wasn't verified."""
-    request_id = getattr(body, "request_id", None)  # body used for JSON payload
+    """Approve a registration request: create the agent + login account, send password setup link.
 
+    SECURITY IMPROVEMENTS:
+    - Password set AFTER approval (not during registration)
+    - User receives setup_token to create password
+    - Email verified requirement enforced
+    - No password hash stored until user completes setup
+    """
     r = await db.execute(text("""
-        SELECT id, email, password_hash, full_name, agent_name, use_case,
+        SELECT id, email, full_name, agent_name, use_case,
                plan_requested, status, email_verified
         FROM registration_requests WHERE id::text=:id
     """), {"id": req_id})
     req = r.fetchone()
     if not req:
         raise HTTPException(404, "Registration request not found")
-    if req[7] != "pending":
-        raise HTTPException(409, f"Request is already {req[7]}. Only pending requests can be approved.")
-    if not req[8]:
+    if req[6] != "pending":
+        raise HTTPException(409, f"Request is already {req[6]}. Only pending requests can be approved.")
+    if not req[7]:
         raise HTTPException(400, "Email not verified. Approval requires a verified email (security requirement).")
-    if req[7] == "approved":
-        raise HTTPException(409, "Request already approved")
 
-    email, pw_hash, full_name = req[1], req[2], req[3] or ""
-    submitted_agent_name = req[4] or ""
-    plan = req[6] or "pro"
+    email, full_name = req[1], req[2] or ""
+    submitted_agent_name = req[3] or ""
+    plan = req[5] or "pro"
 
     # Admin-chosen overrides (default to submitted details)
     agent_name = (body.get("agent_name") or submitted_agent_name or "My Assistant").strip()
@@ -349,50 +349,72 @@ async def approve_registration(req_id: str, body: dict = Body(...), db: AsyncSes
     except Exception as e:
         profile_status = f"failed: {e}"
 
-    # ── 2. Create login account (uses the password set at registration) ──
+    # ── 2. Create login account WITHOUT password (password set later by user) ──
+    # SECURITY FIX: No password_hash here - user sets it after approval
     await db.execute(text("""
-        INSERT INTO user_accounts (user_profile_id, email, password_hash, email_verified)
-        VALUES (:p, :e, :h, true)
+        INSERT INTO user_accounts (user_profile_id, email, email_verified)
+        VALUES (:p, :e, true)
         ON CONFLICT (email) DO NOTHING
-    """), {"p": uid, "e": email, "h": pw_hash})
+    """), {"p": uid, "e": email})
 
-    # ── 3. Generate one-time Telegram activation link ──
+    # ── 3. Generate password setup token (3-day expiry) ──
+    setup_token = secrets.token_urlsafe(32)
+    setup_expires = datetime.utcnow() + timedelta(days=3)
+
+    # ── 4. Generate Telegram activation link (optional) ──
     tg_code = "link_" + secrets.token_urlsafe(16)
     await db.execute(text("""
         INSERT INTO invite_links (code, label, agent_name, plan, trial_days, claimed_by)
         VALUES (:c, :l, :a, 'pro', 0, :uid)
     """), {"c": tg_code, "l": f"Activation {email}", "a": agent_name, "uid": uid})
 
-    # ── 4. Mark request approved + store activation token ──
-    act_token = secrets.token_urlsafe(32)
-    act_expires = datetime.utcnow() + timedelta(days=3)
+    # ── 5. Mark request approved + store setup token ──
     await db.execute(text("""
         UPDATE registration_requests
         SET status='approved', assigned_profile_id=:pid,
-            activation_token=:at, activation_expires=:ax,
+            setup_token=:st, setup_token_expires=:sx,
             review_note=:rn, reviewed_at=NOW()
         WHERE id=:id
-    """), {"pid": uid, "at": act_token, "ax": act_expires,
+    """), {"pid": uid, "st": setup_token, "sx": setup_expires,
            "rn": (body.get("review_note") or "")[:500], "id": req_id})
     await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:u, 'registration_approved', :d)"),
                      {"u": uid, "d": f'{{"email":"{email}","plan":"{final_plan}"}}'})
     await db.commit()
 
-    # ── 5. Email the user with agent activation + dashboard access ──
+    # ── 6. Email the user with password setup link ──
+    setup_link = f"https://beprepared.dev/user/setup-password?token={setup_token}"
     tg_link = f"https://t.me/BotBePreparedBot?start={tg_code}"
-    dashboard = "https://beprepared.dev/user/login"
-    subject = f"Your agent {agent_name} is ready! 🎉"
+    subject = f"You're approved{f', {full_name}' if full_name else ''}! Set up your account"
+
     email_html = f"""<!DOCTYPE html><html><body style="font-family:-apple-system,sans-serif;max-width:560px;margin:40px auto;padding:20px">
 <div style="background:#1A1A2E;border-radius:12px;padding:32px;text-align:center;margin-bottom:24px">
-<h1 style="color:#fff;font-size:22px;margin:0">🎉 You're approved, {full_name or agent_name}!</h1>
-<p style="color:#A29BFE;margin:8px 0 0">Your AI agent <strong>{agent_name}</strong> is ready.</p>
+<h1 style="color:#fff;font-size:22px;margin:0">🎉 You're approved{f', {full_name}' if full_name else ''}!</h1>
+<p style="color:#A29BFE;margin:8px 0 0">Your AI agent <strong>{agent_name}</strong> is ready</p>
 </div>
-<p style="font-size:15px;color:#333">Tap to connect your Telegram and activate your agent:</p>
-<a href="{tg_link}" style="display:block;background:#6C5CE7;color:#fff;padding:14px 24px;border-radius:8px;text-align:center;text-decoration:none;font-size:16px;margin:16px 0">Connect Telegram & Activate</a>
-<p style="font-size:14px;color:#333"><strong>Dashboard:</strong> <a href="{dashboard}" style="color:#6C5CE7">{dashboard}</a><br>
-Log in with the email and password you registered with.</p>
+
+<h2 style="color:#1A1A2E;font-size:18px">Get started in 2 steps:</h2>
+
+<div style="background:#F3F4F6;border-radius:10px;padding:20px;margin:16px 0">
+<h3 style="color:#1A1A2E;font-size:16px;margin:0 0 8px">1️⃣ Set your password</h3>
+<p style="color:#4B5563;font-size:14px;margin:0 0 12px">Create a secure password to access your dashboard</p>
+<a href="{setup_link}" style="display:block;background:#6C5CE7;color:#fff;padding:14px 24px;border-radius:8px;text-align:center;text-decoration:none;font-size:16px">Set Password & Login</a>
+<p style="color:#9CA3AF;font-size:12px;margin:12px 0 0">Link expires in 3 days</p>
+</div>
+
+<div style="background:#F3F4F6;border-radius:10px;padding:20px;margin:16px 0">
+<h3 style="color:#1A1A2E;font-size:16px;margin:0 0 8px">2️⃣ Connect Telegram (Optional)</h3>
+<p style="color:#4B5563;font-size:14px;margin:0 0 12px">Chat with your agent on Telegram</p>
+<a href="{tg_link}" style="display:block;background:#0088CC;color:#fff;padding:14px 24px;border-radius:8px;text-align:center;text-decoration:none;font-size:16px">Connect Telegram</a>
+</div>
+
+<p style="font-size:13px;color:#6B7280;margin-top:24px">
+<strong>Plan:</strong> {final_plan.title()}<br>
+<strong>Agent Name:</strong> {agent_name}
+</p>
+
 <p style="font-size:13px;color:#888;margin-top:24px">Sent by Hermes · beprepared.dev</p>
 </body></html>"""
+
     try:
         from app.services.email import send_email
         await send_email(email, subject, email_html)
@@ -400,9 +422,17 @@ Log in with the email and password you registered with.</p>
     except Exception as e:
         email_status = f"failed: {e}"
 
-    return {"status": "approved", "user_id": uid, "agent_name": agent_name,
-            "plan": final_plan, "profile_status": profile_status,
-            "telegram_link": tg_link, "email_status": email_status}
+    return {
+        "status": "approved",
+        "user_id": uid,
+        "agent_name": agent_name,
+        "plan": final_plan,
+        "profile_status": profile_status,
+        "telegram_link": tg_link,
+        "setup_link": setup_link,
+        "email_status": email_status,
+        "message": "User will receive email with password setup link"
+    }
 
 
 @router.post("/registration-requests/{req_id}/reject")
