@@ -66,7 +66,6 @@ export default {
       } catch(e) { this.linkResult={ agent:u.agent_name, url:'', error:e.message } }
       finally { u.linkBusy=false }
     },
-    copylabel() { return this.copied ? 'Copied ✓' : 'Copy' },
     async copyLink() {
       if(!this.linkResult) return
       const url=this.linkResult.url||''
@@ -87,6 +86,9 @@ export default {
       } catch(e) { alert('Failed to delete user') }
       finally { this.deleting=false }
     }
+  },
+  computed: {
+    copylabel() { return this.copied ? 'Copied ✓' : 'Copy' },
   },
   mounted() { this.load() }
 }
