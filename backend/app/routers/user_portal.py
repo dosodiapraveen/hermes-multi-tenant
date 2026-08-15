@@ -607,3 +607,31 @@ async def delete_job(request: Request, job_id: str, user: dict = Depends(resolve
         await db.execute(text("DELETE FROM background_jobs WHERE id::text=:j AND user_id::text=:u"), {"j": job_id, "u": user["id"]})
         await db.commit()
     return {"status": "deleted"}
+
+@router.get("/personality")
+async def get_personality(user: dict = Depends(resolve_user)):
+    from app.services.persona import DEFAULT_PERSONALITY
+    async with async_session_factory() as db:
+        r = await db.execute(text("SELECT agent_name, personality FROM user_profiles WHERE id::text=:u"), {"u": user["id"]})
+        row = r.fetchone()
+        agent_name = (row[0] if row else None) or "Agent"
+        persona = (row[1] if row and row[1] else None)
+    return {
+        "agent_name": agent_name,
+        "personality": persona or DEFAULT_PERSONALITY.format(agent_name=agent_name),
+        "is_custom": bool(persona and persona.strip()),
+    }
+
+@router.put("/personality")
+@limiter.limit("20/minute")
+async def update_personality(request: Request, body: dict, user: dict = Depends(resolve_user)):
+    txt = (body.get("personality") or "").strip()
+    if not txt:
+        raise HTTPException(400, "personality cannot be empty")
+    if len(txt) > 20000:
+        raise HTTPException(400, "personality too long (max 20000 chars)")
+    async with async_session_factory() as db:
+        await db.execute(text("UPDATE user_profiles SET personality=:p WHERE id::text=:u"), {"p": txt, "u": user["id"]})
+        await db.commit()
+    return {"status": "saved", "message": "Agent personality updated."}
+

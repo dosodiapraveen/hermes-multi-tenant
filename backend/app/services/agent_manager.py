@@ -385,7 +385,7 @@ async def _search_fallback(query: str, num_results: int = 5) -> tuple:
     except:
         return "Search unavailable. Please try again.", ""
 
-async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None) -> str:
+async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None, personality: str = None) -> str:
     """Process a user message through their isolated profile with memory, vault, and tools."""
     uid = profile_dir.split("/")[-1] if profile_dir else user_id
     cfg = get_user_config(uid)
@@ -397,7 +397,26 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     kb = read_knowledge_base(uid)
     agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
 
-    system = f"You are {agent_name}, a helpful AI assistant with web search, vault read/write, knowledge base, and memory tools."
+    from app.services.persona import DEFAULT_PERSONALITY
+
+    # If not supplied, load the agent's personality (SOUL) from the DB.
+    if not (personality and personality.strip()):
+        try:
+            from sqlalchemy import text as _st
+            async with async_session_factory() as db:
+                _r = await db.execute(_st("SELECT personality FROM user_profiles WHERE id::text=:u"), {"u": user_id})
+                _row = _r.fetchone()
+                personality = (_row[0] if _row else None) or None
+        except Exception:
+            personality = None
+
+    if personality and personality.strip():
+        system = f"You are {agent_name}.\n\n{personality.strip()}"
+        system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
+    else:
+        system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
+        system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
+
     system += f"\n\n📚 Your knowledge base contains:\n{kb}" if kb and "No documents" not in kb else ""
     system += f"\n\n📝 Your vault:\n{vault}" if vault else ""
 

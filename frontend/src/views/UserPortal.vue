@@ -232,6 +232,19 @@
         </div>
         <p v-if="!groupedActivity.length" class="empty">No activity yet.</p>
       </section>
+
+      <!-- ─────── PERSONALITY ─────── -->
+      <section v-if="tab==='personality'">
+        <div class="section-header">
+          <h2>🧠 {{ personaAgentName }} — Personality (SOUL.md)</h2>
+        </div>
+        <p class="persona-intro">This file shapes <em>who I am and how I help you</em> — tone, style, and rules. Edit it below (or tell me <code>/personality</code> on Telegram) and I follow it in every reply.</p>
+        <textarea v-model="personality" class="persona-editor" rows="16" placeholder="# ... "></textarea>
+        <div class="row-end">
+          <button class="btn-primary" @click="savePersonality" :disabled="personalitySaving">{{ personalitySaving ? 'Saving…' : 'Save personality' }}</button>
+          <span v-if="personalitySaved" class="ok">✓ Saved</span>
+        </div>
+      </section>
     </main>
 
     <!-- ─────── NOTE MODAL ─────── -->
@@ -419,7 +432,8 @@ export default {
     showIdeaModal:false, editingIdea:null, ideaForm:{title:'',content:'',status:'brainstorm',tags:''},
     showEventModal:false, editingEvent:null, endTouched:false, eventForm:{title:'',description:'',date:'',startH:12,startMin:'00',startAP:'AM',endH:1,endMin:'00',endAP:'PM',location:'',is_all_day:false},
     showJobModal:false, editingJob:null, jobForm:{title:'',description:'',job_type:'custom',cron_expression:'0 9 * * *'},
-    tabs:[{key:'dashboard',label:'🏠'},{key:'ideas',label:'Ideas'},{key:'notes',label:'Notes'},{key:'schedule',label:'Schedule'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'jobs',label:'Jobs'},{key:'activity',label:'Activity'}],
+    personality:'', personaAgentName:'Agent', personalitySaving:false, personalitySaved:false,
+    tabs:[{key:'dashboard',label:'🏠'},{key:'ideas',label:'Ideas'},{key:'notes',label:'Notes'},{key:'schedule',label:'Schedule'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'jobs',label:'Jobs'},{key:'activity',label:'Activity'},{key:'personality',label:'🧠 Personality'}],
   }},
   computed:{
     todayStr(){ return new Date().toISOString().slice(0,10) },
@@ -448,8 +462,24 @@ export default {
     recentIdeas(){return this.ideas.filter(i=>i.status==='brainstorm').slice(0,3)},
     failedJobs(){return this.jobs.filter(j=>j.last_result&&j.last_result.includes('fail'))}
   },
+  watch:{ tab(v){ if(v==='personality') this.loadPersonality() } },
   methods:{
     statusLabel(s){return{active:'🟢 Active',paused:'🟡 Paused',done:'✅ Done',archived:'📦 Archived'}[s]||s},
+    async loadPersonality(){
+      try{
+        const r=await this.api('GET','/api/me/personality')
+        this.personality=r.personality||''
+        this.personaAgentName=r.agent_name||'Agent'
+      }catch(e){}
+    },
+    async savePersonality(){
+      this.personalitySaving=true; this.personalitySaved=false
+      try{
+        await this.api('PUT','/api/me/personality',{personality:this.personality})
+        this.personalitySaved=true
+      }catch(e){ alert('Failed to save: '+(e.message||e)) }
+      finally{ this.personalitySaving=false }
+    },
     actIcon(a){
       const s=(a.action||'').toLowerCase()
       if(s.includes('note'))return '📝'
@@ -876,5 +906,11 @@ main{max-width:960px;margin:0 auto;padding:20px}
 .rbody p{margin:2px 0 0;font-size:13px;color:#636E70;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rscore{font-size:12px;color:#16a34a;flex-shrink:0}
 .ss-clear{margin-top:8px;background:none;border:none;color:#6C5CE7;cursor:pointer;font-size:13px}
+
+
+.persona-intro{color:#8395a7;font-size:13px;margin:4px 0 14px;line-height:1.5}
+.persona-editor{width:100%;min-height:300px;padding:14px;border:1.5px solid #DFE6E9;border-radius:10px;font-family:ui-monospace,Menlo,monospace;font-size:13px;line-height:1.6;background:#fff;color:#1A1A2E;resize:vertical}
+.row-end{display:flex;align-items:center;gap:12px;margin-top:12px}
+.ok{color:#10AC84;font-size:13px;font-weight:600}
 
 </style>

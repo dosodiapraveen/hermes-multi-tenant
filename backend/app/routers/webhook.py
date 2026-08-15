@@ -242,6 +242,27 @@ async def telegram(request: Request):
                 typing_task.cancel()
                 return {"status": "voice_error"}
 
+        # ── Agent personality (SOUL) commands ──
+        _low = (text_msg or "").strip()
+        if _low.startswith("/personality") or _low.startswith("/soul"):
+            _rest = _low.split(None, 1)[1] if " " in _low else ""
+            if _rest:
+                async with async_session_factory() as db:
+                    await db.execute(text("UPDATE user_profiles SET personality=:p WHERE id::text=:u"), {"p": _rest, "u": str(u[0])})
+                    await db.commit()
+                await send_tg(chat_id, "✅ **Personality updated!** I'll follow these instructions from now on.\n\n" + _rest[:400])
+            else:
+                async with async_session_factory() as db:
+                    _r = await db.execute(text("SELECT personality FROM user_profiles WHERE id::text=:u"), {"u": str(u[0])})
+                    _row = _r.fetchone()
+                if _row and _row[0]:
+                    await send_tg(chat_id, "🧠 **Your agent personality:**\n\n" + _row[0][:1000])
+                else:
+                    await send_tg(chat_id, "🧠 Your agent uses the **default personality**. Send `/personality` followed by your instructions to customize me — e.g. `/personality Always keep replies under 100 words and greet me by name.`")
+            stop_typing.set()
+            typing_task.cancel()
+            return {"status": "personality"}
+
         try:
             resp = await hermes_profile_chat_with_fallback(
                 user_id=str(u[0]),
