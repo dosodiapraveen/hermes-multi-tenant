@@ -13,7 +13,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import init_db, close_db
-from app.routers import admin, invite, user_auth, user_portal, webhook
+from app.routers import admin, invite, user_auth, user_portal, webhook, analytics, templates, onboarding
 from app.auth import verify_jwt
 from app.logging_config import setup_logging, get_logger
 from app.middleware.logging_middleware import LoggingMiddleware
@@ -237,6 +237,9 @@ app.include_router(invite.router, prefix="/api/invite", tags=["invite"])
 app.include_router(user_auth.router, tags=["user_auth"])
 app.include_router(user_portal.router, tags=["portal"])
 app.include_router(webhook.router, prefix="/api/webhook", tags=["webhook"])
+app.include_router(analytics.router, tags=["analytics"])
+app.include_router(templates.router, tags=["templates"])
+app.include_router(onboarding.router, tags=["onboarding"])
 
 if __name__ == "__main__":
     import uvicorn
