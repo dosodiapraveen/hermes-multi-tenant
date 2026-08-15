@@ -9,6 +9,7 @@ Run this after migrations to populate template data.
 """
 from sqlalchemy import text
 from app.database import async_session_factory
+import json
 
 
 async def seed_project_templates():
@@ -232,12 +233,12 @@ async def seed_project_templates():
                     "desc": tmpl["description"],
                     "cat": tmpl["category"],
                     "ind": tmpl["industry"],
-                    "data": tmpl["template_data"],
-                    "tasks": tmpl["default_tasks"],
-                    "research": tmpl["default_research_topics"],
+                    "data": json.dumps(tmpl["template_data"]),
+                    "tasks": json.dumps(tmpl["default_tasks"]),
+                    "research": json.dumps(tmpl["default_research_topics"]),
                     "icon": tmpl["icon"],
                     "color": tmpl["color"],
-                    "tags": tmpl["tags"],
+                    "tags": json.dumps(tmpl["tags"]),
                     "featured": tmpl["is_featured"]
                 }
             )
@@ -373,12 +374,12 @@ async def seed_workflow_templates():
                     "title": wf["title"],
                     "desc": wf["description"],
                     "type": wf["workflow_type"],
-                    "steps": wf["steps"],
-                    "prompts": wf["prompts"],
+                    "steps": json.dumps(wf["steps"]),
+                    "prompts": json.dumps(wf["prompts"]),
                     "duration": wf["expected_duration_minutes"],
                     "icon": wf["icon"],
                     "diff": wf["difficulty"],
-                    "tags": wf["tags"],
+                    "tags": json.dumps(wf["tags"]),
                     "featured": wf["is_featured"]
                 }
             )
@@ -508,10 +509,10 @@ async def seed_conversation_examples():
                     "cat": ex["category"],
                     "starter": ex["starter_prompt"],
                     "response": ex["example_response"],
-                    "followups": ex["follow_up_prompts"],
+                    "followups": json.dumps(ex["follow_up_prompts"]),
                     "icon": ex["icon"],
                     "diff": ex["difficulty"],
-                    "tags": ex["tags"],
+                    "tags": json.dumps(ex["tags"]),
                     "featured": ex["is_featured"]
                 }
             )
