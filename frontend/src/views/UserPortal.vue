@@ -624,7 +624,7 @@ export default {
     // default start = next 15-min slot, end = +1h
     autoTimes(){
       const now=new Date(); let min=now.getHours()*60+now.getMinutes(); min=Math.ceil(min/15)*15; if(min>=1440)min=0
-      const s=this.to12(min), e=this.to12(Math.min(min+60,1140))
+      const s=this.to12(min), e=this.to12(Math.min(min+60,1425))
       this.eventForm.startH=s.h; this.eventForm.startMin=s.m; this.eventForm.startAP=s.ap
       this.eventForm.endH=e.h; this.eventForm.endMin=e.m; this.eventForm.endAP=e.ap; this.endTouched=false
     },
@@ -632,7 +632,7 @@ export default {
     autoEndFromStart(){
       if(this.endTouched) return
       const s=this.ampmTo24(this.eventForm.startH,this.eventForm.startAP)*60+Number(this.eventForm.startMin)
-      const e=this.to12(Math.min(s+60,1140))
+      const e=this.to12(Math.min(s+60,1425))
       this.eventForm.endH=e.h; this.eventForm.endMin=e.m; this.eventForm.endAP=e.ap
     },
     // build ISO [[YYYY-MM-DD]T[HH:MM]:00 from form fields
