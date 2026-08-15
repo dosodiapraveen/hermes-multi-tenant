@@ -328,6 +328,15 @@
         <BaseButton @click="saveJob">Save</BaseButton>
       </template>
     </BaseModal>
+
+    <!-- Confirm delete -->
+    <BaseModal v-model="showConfirm" title="Confirm">
+      <p style="margin:0 0 20px;line-height:1.6;color:#333;font-size:14px">{{ confirmMessage }}</p>
+      <div style="display:flex;justify-content:flex-end;gap:10px">
+        <BaseButton variant="outline" @click="showConfirm = false">Cancel</BaseButton>
+        <BaseButton variant="danger" @click="confirmAction">Delete</BaseButton>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -405,6 +414,7 @@ export default {
       editingEvent: null,
       editingProject: null,
       editingJob: null,
+      showConfirm: false, confirmMessage: '', confirmFn: null,
 
       // Forms
       noteForm: { title: '', content: '', category: 'General' },
@@ -586,11 +596,12 @@ export default {
       await this.fetchData()
     },
 
-    async deleteNote(id) {
-      if (!confirm('Delete this note?')) return
+    deleteNote(id) {
+      this.askConfirm('Delete this note?', async () => {
       await this.api('DELETE', `/api/me/notes/${id}`)
       this.showToast('Note deleted')
       await this.fetchData()
+      }
     },
 
     // Ideas
@@ -619,11 +630,12 @@ export default {
       await this.fetchData()
     },
 
-    async deleteIdea(id) {
-      if (!confirm('Delete this idea?')) return
+    deleteIdea(id) {
+      this.askConfirm('Delete this idea?', async () => {
       await this.api('DELETE', `/api/me/ideas/${id}`)
       this.showToast('Idea deleted')
       await this.fetchData()
+      }
     },
 
     // Events
@@ -680,11 +692,12 @@ export default {
       return d.toISOString().slice(0, 19)
     },
 
-    async deleteEvent(id) {
-      if (!confirm('Delete this event?')) return
+    deleteEvent(id) {
+      this.askConfirm('Delete this event?', async () => {
       await this.api('DELETE', `/api/me/events/${id}`)
       this.showToast('Event deleted')
       await this.fetchData()
+      }
     },
 
     // Reminders
@@ -706,11 +719,12 @@ export default {
       r.done = !r.done
     },
 
-    async deleteReminder(id) {
-      if (!confirm('Delete this reminder?')) return
+    deleteReminder(id) {
+      this.askConfirm('Delete this reminder?', async () => {
       await this.api('DELETE', `/api/me/reminders/${id}`)
       this.showToast('Reminder deleted')
       await this.fetchData()
+      }
     },
 
     // Projects
@@ -747,12 +761,13 @@ export default {
       p.status = status
     },
 
-    async deleteProject(id) {
-      if (!confirm('Delete this project and all its research?')) return
+    deleteProject(id) {
+      this.askConfirm('Delete this project and all its research?', async () => {
       await this.api('DELETE', `/api/me/projects/${id}`)
       this.showToast('Project deleted')
       await this.fetchData()
       this.selectedProject = null
+      }
     },
 
     // Research
@@ -769,11 +784,12 @@ export default {
       this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
     },
 
-    async deleteResearch(pid, rid) {
-      if (!confirm('Delete this research?')) return
+    deleteResearch(pid, rid) {
+      this.askConfirm('Delete this research?', async () => {
       await this.api('DELETE', `/api/me/projects/${pid}/research/${rid}`)
       this.showToast('Research deleted')
       this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
+      }
     },
 
     // Jobs
@@ -807,11 +823,24 @@ export default {
       job.is_enabled = !job.is_enabled
     },
 
-    async deleteJob(id) {
-      if (!confirm('Delete this background job?')) return
-      await this.api('DELETE', `/api/me/jobs/${id}`)
-      this.showToast('Job deleted')
-      await this.fetchData()
+    deleteJob(id) {
+      this.askConfirm('Delete this background job?', async () => {
+        await this.api('DELETE', `/api/me/jobs/${id}`)
+        this.showToast('Job deleted')
+        await this.fetchData()
+      })
+    },
+
+    askConfirm(message, fn) {
+      this.confirmMessage = message
+      this.confirmFn = fn
+      this.showConfirm = true
+    },
+    confirmAction() {
+      this.showConfirm = false
+      const fn = this.confirmFn
+      this.confirmFn = null
+      if (fn) fn()
     }
   }
 }
