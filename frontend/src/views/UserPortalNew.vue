@@ -1,18 +1,39 @@
 <template>
   <div class="portal">
+    <!-- Skip Navigation Links (Accessibility) -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#nav-tabs" class="skip-link">Skip to navigation</a>
+
     <!-- Header -->
-    <header class="portal-header">
+    <header class="portal-header" role="banner">
       <div class="header-content">
         <h1>
           <BaseIcon name="home" :size="20" />
           {{ user }}
         </h1>
-        <nav class="nav-tabs">
+
+        <!-- Mobile Menu Button -->
+        <button
+          class="mobile-menu-btn"
+          :aria-expanded="mobileMenuOpen"
+          aria-controls="nav-tabs"
+          aria-label="Toggle navigation menu"
+          @click="mobileMenuOpen = !mobileMenuOpen"
+        >
+          <BaseIcon :name="mobileMenuOpen ? 'x' : 'menu'" :size="24" />
+        </button>
+
+        <nav
+          id="nav-tabs"
+          :class="['nav-tabs', { 'nav-tabs--open': mobileMenuOpen }]"
+          role="navigation"
+          aria-label="Main navigation"
+        >
           <button
             v-for="t in tabs"
             :key="t.key"
             :class="['nav-tab', { active: tab === t.key }]"
-            @click="tab = t.key"
+            @click="selectTab(t.key)"
           >
             <BaseIcon :name="t.icon" :size="16" />
             <span class="tab-label">{{ t.label }}</span>
@@ -25,16 +46,18 @@
             />
           </button>
         </nav>
+
         <div class="header-actions">
           <BaseThemeToggle />
-          <BaseButton variant="outline" icon="log-out" @click="logout">
+          <BaseButton variant="outline" icon="log-out" @click="logout" class="logout-btn">
             <span class="logout-label">Logout</span>
           </BaseButton>
         </div>
       </div>
     </header>
 
-    <main class="portal-main">
+    <main id="main-content" class="portal-main" role="main" aria-label="Dashboard content">
+      <ErrorBoundary @error="handleError" @retry="fetchData">
       <!-- Loading State -->
       <div v-if="loading" class="loading-container">
         <div class="skeleton-grid">
@@ -169,6 +192,7 @@
         :agent-name="personaAgentName"
         @save="personality = $event"
       />
+      </ErrorBoundary>
     </main>
 
     <!-- Toast Notifications -->
@@ -332,19 +356,30 @@
       </template>
     </BaseModal>
 
-    <!-- Confirm delete -->
-    <BaseModal v-model="showConfirm" title="Confirm">
-      <p style="margin:0 0 20px;line-height:1.6;color:#333;font-size:14px">{{ confirmMessage }}</p>
-      <div style="display:flex;justify-content:flex-end;gap:10px">
-        <BaseButton variant="outline" @click="showConfirm = false">Cancel</BaseButton>
-        <BaseButton variant="danger" @click="confirmAction">Delete</BaseButton>
-      </div>
-    </BaseModal>
+    <!-- Confirm Dialog -->
+    <BaseConfirmDialog
+      v-model="showConfirm"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :variant="confirmVariant"
+      :loading="confirmLoading"
+      confirm-text="Delete"
+      @confirm="confirmAction"
+      @cancel="showConfirm = false"
+    />
+
+    <!-- Onboarding Wizard -->
+    <OnboardingWizard
+      v-model="showOnboarding"
+      @complete="onOnboardingComplete"
+      @skip="onOnboardingComplete"
+      @quickAction="handleQuickAction"
+    />
   </div>
 </template>
 
 <script>
-import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle } from '../components/ui'
+import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog } from '../components/ui'
 import {
   PortalDashboard,
   PortalNotes,
@@ -354,8 +389,10 @@ import {
   PortalProjects,
   PortalJobs,
   PortalActivity,
-  PortalPersonality
+  PortalPersonality,
+  OnboardingWizard
 } from '../components/portal'
+import ErrorBoundary from '../components/common/ErrorBoundary.vue'
 
 export default {
   name: 'UserPortal',
@@ -369,6 +406,8 @@ export default {
     BaseToast,
     BaseDateTimePicker,
     BaseThemeToggle,
+    BaseConfirmDialog,
+    ErrorBoundary,
     PortalDashboard,
     PortalNotes,
     PortalIdeas,
@@ -377,7 +416,8 @@ export default {
     PortalProjects,
     PortalJobs,
     PortalActivity,
-    PortalPersonality
+    PortalPersonality,
+    OnboardingWizard
   },
   data() {
     return {
@@ -386,6 +426,8 @@ export default {
       user: 'My Dashboard',
       loading: true,
       showWelcome: false,
+      showOnboarding: false,
+      mobileMenuOpen: false,
 
       // Data
       notes: [],
@@ -418,7 +460,12 @@ export default {
       editingEvent: null,
       editingProject: null,
       editingJob: null,
-      showConfirm: false, confirmMessage: '', confirmFn: null,
+      showConfirm: false,
+      confirmTitle: 'Confirm Delete',
+      confirmMessage: '',
+      confirmVariant: 'danger',
+      confirmLoading: false,
+      confirmFn: null,
 
       // Forms
       noteForm: { title: '', content: '', category: 'General' },
@@ -480,6 +527,12 @@ export default {
       this.$refs.toast?.[type]?.(message) || this.$refs.toast?.add?.({ message, type })
     },
 
+    handleError({ error, info }) {
+      // Log error for tracking (could integrate with error tracking service)
+      console.error('Portal error captured:', error, info)
+      // Could send to error tracking service here
+    },
+
     handleKeydown(e) {
       if (e.key === 'Escape') {
         if (this.showNoteModal) this.showNoteModal = false
@@ -500,7 +553,13 @@ export default {
       return null
     },
 
-    async api(method, url, body) {
+    selectTab(key) {
+      this.tab = key
+      this.mobileMenuOpen = false
+    },
+
+    async api(method, url, body, options = {}) {
+      const { silent = false } = options
       try {
         const r = await fetch(url, {
           method,
@@ -512,12 +571,20 @@ export default {
         })
         if (r.status === 401) {
           localStorage.removeItem('portal_token')
-          window.location = '/user/login'
-          return null
+          this.showToast('Session expired. Please log in again.', 'warning')
+          setTimeout(() => { window.location = '/user/login' }, 1500)
+          return { error: true, status: 401 }
+        }
+        if (!r.ok) {
+          const data = await r.json().catch(() => ({}))
+          const errorMsg = data.detail || data.message || `Request failed (${r.status})`
+          if (!silent) this.showToast(errorMsg, 'error')
+          return { error: true, status: r.status, message: errorMsg }
         }
         return await r.json()
       } catch (e) {
-        return null
+        if (!silent) this.showToast('Network error. Please check your connection.', 'error')
+        return { error: true, message: e.message }
       }
     },
 
@@ -543,9 +610,10 @@ export default {
           if (ep === 'activity' && d) this.activity = d.activity || []
         }
 
-        const isFirstVisit = !localStorage.getItem('portal_welcomed')
+        // Show onboarding wizard for first-time users with no data
+        const isFirstVisit = !localStorage.getItem('portal_onboarded')
         const hasNoData = this.notes.length === 0 && this.ideas.length === 0 && this.projects.length === 0
-        if (isFirstVisit && hasNoData) this.showWelcome = true
+        if (isFirstVisit && hasNoData) this.showOnboarding = true
       } finally {
         this.loading = false
       }
@@ -554,6 +622,39 @@ export default {
     dismissWelcome() {
       this.showWelcome = false
       localStorage.setItem('portal_welcomed', '1')
+    },
+
+    onOnboardingComplete() {
+      this.showOnboarding = false
+      localStorage.setItem('portal_onboarded', '1')
+      this.showToast('Welcome to Hermes! Let\'s get started.')
+    },
+
+    handleQuickAction(action) {
+      this.showOnboarding = false
+      localStorage.setItem('portal_onboarded', '1')
+
+      // Open appropriate modal based on action
+      switch (action) {
+        case 'note':
+          this.tab = 'notes'
+          this.$nextTick(() => this.openNoteModal())
+          break
+        case 'idea':
+          this.tab = 'ideas'
+          this.$nextTick(() => this.openIdeaModal())
+          break
+        case 'project':
+          this.tab = 'projects'
+          this.$nextTick(() => this.openProjectModal())
+          break
+        case 'reminder':
+          this.tab = 'reminders'
+          this.$nextTick(() => this.openReminderModal())
+          break
+        default:
+          this.tab = 'dashboard'
+      }
     },
 
     logout() {
@@ -588,13 +689,11 @@ export default {
 
     async saveNote() {
       if (!this.noteForm.title) return
-      if (this.editingNote) {
-        await this.api('PUT', `/api/me/notes/${this.editingNote.id}`, this.noteForm)
-        this.showToast('Note updated successfully')
-      } else {
-        await this.api('POST', '/api/me/notes', this.noteForm)
-        this.showToast('Note created successfully')
-      }
+      const result = this.editingNote
+        ? await this.api('PUT', `/api/me/notes/${this.editingNote.id}`, this.noteForm)
+        : await this.api('POST', '/api/me/notes', this.noteForm)
+      if (result?.error) return
+      this.showToast(this.editingNote ? 'Note updated successfully' : 'Note created successfully')
       this.showNoteModal = false
       this.editingNote = null
       await this.fetchData()
@@ -622,13 +721,11 @@ export default {
 
     async saveIdea() {
       if (!this.ideaForm.title) return
-      if (this.editingIdea) {
-        await this.api('PUT', `/api/me/ideas/${this.editingIdea.id}`, this.ideaForm)
-        this.showToast('Idea updated successfully')
-      } else {
-        await this.api('POST', '/api/me/ideas', this.ideaForm)
-        this.showToast('Idea created successfully')
-      }
+      const result = this.editingIdea
+        ? await this.api('PUT', `/api/me/ideas/${this.editingIdea.id}`, this.ideaForm)
+        : await this.api('POST', '/api/me/ideas', this.ideaForm)
+      if (result?.error) return
+      this.showToast(this.editingIdea ? 'Idea updated successfully' : 'Idea created successfully')
       this.showIdeaModal = false
       this.editingIdea = null
       await this.fetchData()
@@ -678,13 +775,11 @@ export default {
           : this.addHour(this.eventForm.datetime)
       }
 
-      if (this.editingEvent) {
-        await this.api('PUT', `/api/me/events/${this.editingEvent.id}`, payload)
-        this.showToast('Event updated successfully')
-      } else {
-        await this.api('POST', '/api/me/events', payload)
-        this.showToast('Event created successfully')
-      }
+      const result = this.editingEvent
+        ? await this.api('PUT', `/api/me/events/${this.editingEvent.id}`, payload)
+        : await this.api('POST', '/api/me/events', payload)
+      if (result?.error) return
+      this.showToast(this.editingEvent ? 'Event updated successfully' : 'Event scheduled successfully')
       this.showEventModal = false
       this.editingEvent = null
       await this.fetchData()
@@ -712,15 +807,18 @@ export default {
 
     async saveReminder() {
       if (!this.reminderForm.title || !this.reminderForm.remind_at) return
-      await this.api('POST', '/api/me/reminders', this.reminderForm)
-      this.showToast('Reminder created successfully')
+      const result = await this.api('POST', '/api/me/reminders', this.reminderForm)
+      if (result?.error) return
+      this.showToast('Reminder set successfully')
       this.showReminderModal = false
       await this.fetchData()
     },
 
     async toggleReminder(r) {
-      await this.api('PUT', `/api/me/reminders/${r.id}`, { done: !r.done })
+      const result = await this.api('PUT', `/api/me/reminders/${r.id}`, { done: !r.done }, { silent: true })
+      if (result?.error) return
       r.done = !r.done
+      this.showToast(r.done ? 'Reminder completed' : 'Reminder restored')
     },
 
     deleteReminder(id) {
@@ -743,21 +841,19 @@ export default {
 
     async saveProject() {
       if (!this.projectForm.title) return
-      if (this.editingProject) {
-        await this.api('PUT', `/api/me/projects/${this.editingProject.id}`, this.projectForm)
-        this.showToast('Project updated successfully')
-      } else {
-        await this.api('POST', '/api/me/projects', this.projectForm)
-        this.showToast('Project created successfully')
-      }
+      const result = this.editingProject
+        ? await this.api('PUT', `/api/me/projects/${this.editingProject.id}`, this.projectForm)
+        : await this.api('POST', '/api/me/projects', this.projectForm)
+      if (result?.error) return
+      this.showToast(this.editingProject ? 'Project updated successfully' : 'Project created successfully')
       this.showProjectModal = false
       this.editingProject = null
       await this.fetchData()
     },
 
     async selectProject(p) {
-      const d = await this.api('GET', `/api/me/projects/${p.id}`)
-      if (d) this.selectedProject = d
+      const d = await this.api('GET', `/api/me/projects/${p.id}`, null, { silent: true })
+      if (d && !d.error) this.selectedProject = d
     },
 
     async updateProjectStatus(p, status) {
@@ -782,8 +878,9 @@ export default {
 
     async saveResearch() {
       if (!this.researchForm.title || !this.selectedProject) return
-      await this.api('POST', `/api/me/projects/${this.selectedProject.id}/research`, this.researchForm)
-      this.showToast('Research added successfully')
+      const result = await this.api('POST', `/api/me/projects/${this.selectedProject.id}/research`, this.researchForm)
+      if (result?.error) return
+      this.showToast('Research added to project')
       this.showResearchModal = false
       this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
     },
@@ -810,21 +907,21 @@ export default {
 
     async saveJob() {
       if (!this.jobForm.title) return
-      if (this.editingJob) {
-        await this.api('PUT', `/api/me/jobs/${this.editingJob.id}`, this.jobForm)
-        this.showToast('Job updated successfully')
-      } else {
-        await this.api('POST', '/api/me/jobs', this.jobForm)
-        this.showToast('Job created successfully')
-      }
+      const result = this.editingJob
+        ? await this.api('PUT', `/api/me/jobs/${this.editingJob.id}`, this.jobForm)
+        : await this.api('POST', '/api/me/jobs', this.jobForm)
+      if (result?.error) return
+      this.showToast(this.editingJob ? 'Job updated successfully' : 'Job created successfully')
       this.showJobModal = false
       this.editingJob = null
       await this.fetchData()
     },
 
     async toggleJob(job) {
-      await this.api('PUT', `/api/me/jobs/${job.id}`, { is_enabled: !job.is_enabled })
+      const result = await this.api('PUT', `/api/me/jobs/${job.id}`, { is_enabled: !job.is_enabled }, { silent: true })
+      if (result?.error) return
       job.is_enabled = !job.is_enabled
+      this.showToast(job.is_enabled ? 'Job enabled' : 'Job disabled')
     },
 
     deleteJob(id) {
@@ -835,16 +932,28 @@ export default {
       })
     },
 
-    askConfirm(message, fn) {
+    askConfirm(message, fn, options = {}) {
+      this.confirmTitle = options.title || 'Confirm Delete'
       this.confirmMessage = message
+      this.confirmVariant = options.variant || 'danger'
       this.confirmFn = fn
+      this.confirmLoading = false
       this.showConfirm = true
     },
-    confirmAction() {
-      this.showConfirm = false
+    async confirmAction() {
       const fn = this.confirmFn
-      this.confirmFn = null
-      if (fn) fn()
+      if (!fn) {
+        this.showConfirm = false
+        return
+      }
+      this.confirmLoading = true
+      try {
+        await fn()
+      } finally {
+        this.confirmLoading = false
+        this.showConfirm = false
+        this.confirmFn = null
+      }
     }
   }
 }
@@ -856,6 +965,29 @@ export default {
   background: var(--color-background);
   font-family: var(--font-family-base);
   color: var(--color-text-primary);
+}
+
+/* Skip Links (Accessibility) */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--spacing-4);
+  z-index: 9999;
+  padding: var(--spacing-3) var(--spacing-4);
+  background: var(--color-primary-500);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  transition: top var(--transition-fast);
+}
+
+.skip-link:focus {
+  top: var(--spacing-4);
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
 }
 
 /* Header */
@@ -888,6 +1020,32 @@ export default {
   min-width: 140px;
 }
 
+/* Mobile Menu Button */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mobile-menu-btn:hover {
+  background: var(--color-gray-100);
+  color: var(--color-text-primary);
+}
+
+.mobile-menu-btn:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
 .nav-tabs {
   display: flex;
   gap: var(--spacing-1);
@@ -915,11 +1073,17 @@ export default {
   cursor: pointer;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  min-height: 44px;
 }
 
 .nav-tab:hover {
   background: var(--color-gray-100);
   color: var(--color-text-primary);
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
 }
 
 .nav-tab.active {
@@ -931,7 +1095,60 @@ export default {
   display: none;
 }
 
+/* Desktop: Show labels */
 @media (min-width: 768px) {
+  .tab-label {
+    display: inline;
+  }
+}
+
+/* Mobile: Hamburger menu */
+@media (max-width: 640px) {
+  .header-content {
+    flex-wrap: wrap;
+    gap: var(--spacing-2);
+  }
+
+  .header-content h1 {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+    order: 1;
+  }
+
+  .header-actions {
+    order: 2;
+    gap: var(--spacing-1);
+  }
+
+  .logout-btn .logout-label {
+    display: none;
+  }
+
+  .nav-tabs {
+    display: none;
+    order: 3;
+    width: 100%;
+    flex-direction: column;
+    gap: var(--spacing-1);
+    padding-top: var(--spacing-3);
+    margin-top: var(--spacing-2);
+    border-top: 1px solid var(--color-border-light);
+  }
+
+  .nav-tabs--open {
+    display: flex;
+  }
+
+  .nav-tab {
+    width: 100%;
+    justify-content: flex-start;
+    padding: var(--spacing-3) var(--spacing-4);
+  }
+
   .tab-label {
     display: inline;
   }
@@ -958,10 +1175,17 @@ export default {
 
 .skeleton-card {
   height: 100px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-100) 0%,
+    var(--color-gray-100) 25%,
+    var(--color-gray-200) 50%,
+    var(--color-gray-100) 75%,
+    var(--color-gray-100) 100%
+  );
+  background-size: 400% 100%;
   border-radius: var(--radius-xl);
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .skeleton-list {
@@ -972,10 +1196,17 @@ export default {
 
 .skeleton-item {
   height: 60px;
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
+  background: linear-gradient(
+    90deg,
+    var(--color-gray-100) 0%,
+    var(--color-gray-100) 25%,
+    var(--color-gray-200) 50%,
+    var(--color-gray-100) 75%,
+    var(--color-gray-100) 100%
+  );
+  background-size: 400% 100%;
   border-radius: var(--radius-lg);
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 .loading-text {
@@ -989,8 +1220,17 @@ export default {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-card,
+  .skeleton-item {
+    animation: none;
+    background: var(--color-gray-100);
+  }
 }
 
 /* Welcome Banner */
