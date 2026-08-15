@@ -708,9 +708,10 @@ export default {
 
     deleteNote(id) {
       this.askConfirm('Delete this note?', async () => {
-      await this.api('DELETE', `/api/me/notes/${id}`)
-      this.showToast('Note deleted')
-      await this.fetchData()
+        const res = await this.api('DELETE', `/api/me/notes/${id}`)
+        if (res && res.error) return
+        this.showToast('Note deleted')
+        await this.fetchData()
       })
     },
 
@@ -740,7 +741,8 @@ export default {
 
     deleteIdea(id) {
       this.askConfirm('Delete this idea?', async () => {
-      await this.api('DELETE', `/api/me/ideas/${id}`)
+      const res = await this.api('DELETE', `/api/me/ideas/${id}`)
+      if (res && res.error) return
       this.showToast('Idea deleted')
       await this.fetchData()
       })
@@ -800,7 +802,8 @@ export default {
 
     deleteEvent(id) {
       this.askConfirm('Delete this event?', async () => {
-      await this.api('DELETE', `/api/me/events/${id}`)
+      const res = await this.api('DELETE', `/api/me/events/${id}`)
+      if (res && res.error) return
       this.showToast('Event deleted')
       await this.fetchData()
       })
@@ -830,7 +833,8 @@ export default {
 
     deleteReminder(id) {
       this.askConfirm('Delete this reminder?', async () => {
-      await this.api('DELETE', `/api/me/reminders/${id}`)
+      const res = await this.api('DELETE', `/api/me/reminders/${id}`)
+      if (res && res.error) return
       this.showToast('Reminder deleted')
       await this.fetchData()
       })
@@ -870,7 +874,8 @@ export default {
 
     deleteProject(id) {
       this.askConfirm('Delete this project and all its research?', async () => {
-      await this.api('DELETE', `/api/me/projects/${id}`)
+      const res = await this.api('DELETE', `/api/me/projects/${id}`)
+      if (res && res.error) return
       this.showToast('Project deleted')
       await this.fetchData()
       this.selectedProject = null
@@ -894,7 +899,8 @@ export default {
 
     deleteResearch(pid, rid) {
       this.askConfirm('Delete this research?', async () => {
-      await this.api('DELETE', `/api/me/projects/${pid}/research/${rid}`)
+      const res = await this.api('DELETE', `/api/me/projects/${pid}/research/${rid}`)
+      if (res && res.error) return
       this.showToast('Research deleted')
       this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
       })
@@ -933,7 +939,8 @@ export default {
 
     deleteJob(id) {
       this.askConfirm('Delete this background job?', async () => {
-      await this.api('DELETE', `/api/me/jobs/${id}`)
+      const res = await this.api('DELETE', `/api/me/jobs/${id}`)
+      if (res && res.error) return
       this.showToast('Job deleted')
       await this.fetchData()
       })
@@ -949,6 +956,7 @@ export default {
     },
     async confirmAction() {
       const fn = this.confirmFn
+      this.confirmFn = null   // consume immediately: blocks a repeat confirm event from re-running the op
       if (!fn) {
         this.showConfirm = false
         return
@@ -959,7 +967,6 @@ export default {
       } finally {
         this.confirmLoading = false
         this.showConfirm = false
-        this.confirmFn = null
       }
     }
   }

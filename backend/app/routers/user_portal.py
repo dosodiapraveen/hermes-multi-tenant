@@ -117,9 +117,23 @@ async def delete_note(request: Request, note_id: str, user: dict = Depends(resol
     async with async_session_factory() as db:
         row = (await db.execute(text("DELETE FROM notes WHERE id::text=:n AND user_id::text=:u RETURNING id"), {"n": note_id, "u": user["id"]})).fetchone()
         await db.commit()
-    if not row:
-        raise HTTPException(404, "Note not found")
-    return {"status": "deleted"}
+    if row:
+        return {"status": "deleted"}
+    # Vault-file notes (e.g. "vault_Welcome.md") are file-backed, not DB rows.
+    # A note visible to the user is deletable by them — remove the underlying file.
+    if note_id.startswith("vault_"):
+        fname = note_id[len("vault_"):]
+        if fname and "/" not in fname and ".." not in fname and fname.endswith(".md"):
+            inbox = OBSIDIAN_ROOT / user["id"] / "Inbox"
+            f = (inbox / fname).resolve()
+            base = inbox.resolve()
+            if base != f and str(base).startswith(str(f.parent)) and f.is_file():
+                try:
+                    f.unlink()
+                    return {"status": "deleted", "source": "vault"}
+                except OSError:
+                    pass
+    raise HTTPException(404, "Note not found")
 
 # ═══════════════════════════ PROJECTS ═══════════════════════════
 
