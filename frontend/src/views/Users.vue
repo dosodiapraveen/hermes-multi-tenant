@@ -11,7 +11,10 @@
           <td><span class="badge">{{ u.plan }}</span></td>
           <td><span :class="u.is_active ? 'green' : 'muted'">{{ u.is_active ? 'Active' : 'Inactive' }}</span></td>
           <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis">{{ u.primary_model }}</td>
-          <td><button class="btn-del" @click="confirmDelete(u)">Delete</button></td>
+          <td>
+            <button class="btn-access" @click="genLink(u)" :disabled="u.linkBusy">{{ u.linkBusy ? '…' : 'Access' }}</button>
+            <button class="btn-del" @click="confirmDelete(u)">Delete</button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -38,6 +41,17 @@ export default {
     tok() { return 'Bearer '+localStorage.getItem('token') },
     async load() { const r=await fetch('/api/admin/users',{headers:{'Authorization':this.tok()}}); this.users=await r.json() },
     confirmDelete(u) { this.deletingUser=u; this.showDialog=true; this.deleting=false },
+    async genLink(u) {
+      this.$set(u,'linkBusy',true)
+      try {
+        const r=await fetch('/api/admin/users/'+u.id+'/access-link',{method:'POST',headers:{'Authorization':this.tok()}})
+        const d=await r.json().catch(()=>({}))
+        if(!r.ok) throw new Error(d.detail||'Failed')
+        if(navigator.clipboard){ await navigator.clipboard.writeText(d.access_link) }
+        alert('Access link copied to clipboard for '+d.agent_name+':\n'+d.access_link)
+      } catch(e) { alert('Failed to generate access link') }
+      finally { this.$set(u,'linkBusy',false) }
+    },
     async doDelete() {
       this.deleting=true
       try {
@@ -61,6 +75,9 @@ td { padding:12px 16px; border-bottom:1px solid #DFE6E9; font-size:13px; }
 .green { color:#00B894; font-weight:500; }
 .muted { color:#B2BEC3; }
 .btn-del { padding:5px 12px; border:none; border-radius:6px; background:rgba(225,112,85,0.1); color:#E17055; font-size:12px; font-weight:500; cursor:pointer; }
+.btn-access { padding:5px 12px; border:none; border-radius:6px; background:rgba(108,92,231,0.1); color:#6C5CE7; font-size:12px; font-weight:500; cursor:pointer; margin-right:6px; }
+.btn-access:hover { background:rgba(108,92,231,0.2); }
+.btn-access:disabled { opacity:.6; }
 .btn-del:hover { background:rgba(225,112,85,0.2); }
 .overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
 .dialog { background:white; border-radius:14px; padding:28px; max-width:420px; width:90%; }

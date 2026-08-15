@@ -15,7 +15,7 @@ export default {
     const token=new URLSearchParams(location.search).get('token')
     if(!token){this.icon='❌';this.msg='Missing verification token';this.sub='The link is invalid. Please request a new one.';return}
     try{
-      const r=await fetch('/api/auth/user/register/verify?token='+token)
+      const r=await fetch('/api/auth/user/verify?token='+token)
       const d=await r.json().catch(()=>({}))
       if(r.ok){this.icon='✅';this.msg='Email verified!';this.sub=d.message||'Your request is now with an admin for review.';this.success=true}
       else {this.icon='❌';this.msg='Verification failed';this.sub=d.detail||'Invalid or expired link'}

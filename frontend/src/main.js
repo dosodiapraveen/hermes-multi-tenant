@@ -11,6 +11,7 @@ import Join from './views/Join.vue'
 import Usage from './views/Usage.vue'
 import UserPortal from './views/UserPortal.vue'
 import UserRegister from './views/UserRegister.vue'
+import UserAgentAccess from './views/UserAgentAccess.vue'
 import UserLogin from './views/UserLogin.vue'
 import UserForgot from './views/UserForgot.vue'
 import UserReset from './views/UserReset.vue'
@@ -30,6 +31,7 @@ const routes = [
   { path: '/user', redirect: '/user/dashboard' },
   { path: '/user/dashboard', name: 'UserPortal', component: UserPortal, meta: { public: true } },
   { path: '/user/register', name: 'UserRegister', component: UserRegister, meta: { public: true } },
+  { path: '/user/agent-access', name: 'UserAgentAccess', component: UserAgentAccess, meta: { public: true } },
   { path: '/user/login', name: 'UserLogin', component: UserLogin, meta: { public: true } },
   { path: '/user/forgot', name: 'UserForgot', component: UserForgot, meta: { public: true } },
   { path: '/user/reset', name: 'UserReset', component: UserReset, meta: { public: true } },

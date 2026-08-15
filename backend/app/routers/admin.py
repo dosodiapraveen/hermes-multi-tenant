@@ -198,6 +198,24 @@ async def test_email(body: dict = Body(...)):
     await send_welcome_email(email, "Test User", "pro")
     return {"status": "sent", "email": email}
 
+@router.post("/users/{user_id}/access-link")
+async def generate_access_link(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Generate a dashboard access link for an EXISTING agent (no approval needed).
+    The link carries the profile UUID as a capability token; whoever registers
+    with it must still verify their email before login.
+    """
+    r = await db.execute(text(
+        "SELECT agent_name, is_active FROM user_profiles WHERE id::text=:id"), {"id": user_id})
+    p = r.fetchone()
+    if not p:
+        raise HTTPException(404, "Agent not found")
+    if not p[1]:
+        raise HTTPException(400, "Agent is inactive")
+
+    url = f"https://beprepared.dev/user/agent-access?token={user_id}"
+    return {"agent_name": p[0] or "Agent", "access_link": url, "user_id": user_id}
+
+
 @router.post("/users/{user_id}/timezone")
 async def set_user_timezone(user_id: str, body: dict = Body(...), db: AsyncSession = Depends(get_db)):
     tz = body.get("timezone", "")

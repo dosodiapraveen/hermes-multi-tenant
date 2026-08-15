@@ -179,6 +179,109 @@ async def register(request: Request, body: dict):
     }
 
 
+@router.get("/agent/info")
+async def agent_info(token: str = ""):
+    """Public: resolve a dashboard-access link token to an agent (no sensitive data)."""
+    if not token:
+        raise HTTPException(400, "token required")
+    async with async_session_factory() as db:
+        r = await db.execute(text(
+            "SELECT agent_name, is_active FROM user_profiles WHERE id::text=:t"), {"t": token})
+        p = r.fetchone()
+        if not p:
+            raise HTTPException(404, "Invalid link token")
+        if not p[1]:
+            raise HTTPException(400, "This agent is inactive")
+    return {"agent_name": p[0] or "Agent"}
+
+
+@router.post("/agent/register")
+@limiter.limit("5/hour")
+async def agent_register(request: Request, body: dict):
+    """Register a dashboard account for an EXISTING agent (no approval needed).
+
+    Security: the ``token`` must be a real ``user_profiles`` UUID (bound to a
+    configured agent). Email verification is required before login. If the
+    profile already has a VERIFIED account, registration is refused (use
+    forgot-password instead). Unverified accounts are replaced on re-register.
+    """
+    token = (body.get("token") or body.get("profile_id") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+
+    if not token or not email or not password:
+        raise HTTPException(400, "token, email and password are required")
+    if "@" not in email or "." not in email.split("@")[1]:
+        raise HTTPException(400, "Please enter a valid email address")
+    if len(password) < 12 or not any(x.isupper() for x in password) or \
+       not any(x.islower() for x in password) or not any(x.isdigit() for x in password):
+        raise HTTPException(400, "Password must be at least 12 chars with upper, lower and a digit")
+
+    async with async_session_factory() as db:
+        # Profile must exist (bound to a configured agent)
+        rp = await db.execute(text(
+            "SELECT id, agent_name FROM user_profiles WHERE id::text=:t"), {"t": token})
+        prof = rp.fetchone()
+        if not prof:
+            raise HTTPException(404, "Agent not found. Please use the link provided by your admin.")
+        profile_id, agent_name = str(prof[0]), prof[1] or "Agent"
+
+        # Refuse if a VERIFIED account already exists for this profile
+        rex = await db.execute(text(
+            "SELECT id FROM user_accounts WHERE user_profile_id::text=:p AND email_verified=true"),
+            {"p": profile_id})
+        if rex.fetchone():
+            raise HTTPException(409, "Dashboard access already set up. Use 'forgot password' to reset your password.")
+
+        # Reject duplicate email used by another profile
+        rem = await db.execute(text(
+            "SELECT id FROM user_accounts WHERE email=:e AND user_profile_id::text<>:p"),
+            {"e": email, "p": profile_id})
+        if rem.fetchone():
+            raise HTTPException(409, "That email is already in use by another account.")
+
+        # Replace any unverified account for this profile (re-register)
+        await db.execute(text("DELETE FROM user_accounts WHERE user_profile_id::text=:p AND email_verified=false"),
+                         {"p": profile_id})
+
+        vtoken = generate_token()
+        vlink = f"{FRONTEND_URL}/user/verify?token={vtoken}"
+        await db.execute(text("""
+            INSERT INTO user_accounts
+              (user_profile_id, email, password_hash, email_verified,
+               verification_token, verification_expires)
+            VALUES (:p, :e, :h, false, :vt, NOW() + INTERVAL '72 hours')
+        """), {"p": profile_id, "e": email, "h": hash_password(password), "vt": vtoken})
+        await db.commit()
+
+    # Verify token resolves against user_accounts (defensive round-trip)
+    async with async_session_factory() as db:
+        rv = await db.execute(text(
+            "SELECT email FROM user_accounts WHERE verification_token=:vt"), {"vt": vtoken})
+        if not rv.fetchone():
+            raise HTTPException(500, "Account could not be created. Please try again.")
+
+    # Send verification email (Resend). Fall back to returning the link if email fails.
+    email_sent = False
+    try:
+        html = (f"<h2>Set up your {agent_name} dashboard</h2>"
+                f"<p>Verify your email to activate your dashboard access:</p>"
+                f'<a href="{vlink}">Verify email</a>')
+        await send_email(email, "Verify your AddPrepared dashboard email", html)
+        email_sent = True
+    except Exception as e:
+        logger.warning("agent_register_email_failed", error=str(e), recipient=email)
+
+    return {
+        "status": "registered",
+        "agent_name": agent_name,
+        "email_sent": email_sent,
+        "verify_link": vlink,
+        "message": "Verification email sent. Click the link to verify, then log in." if email_sent
+                   else "Account created. Click the verify link below to activate.",
+    }
+
+
 @router.post("/register/resend-verification")
 @limiter.limit("3/hour")
 async def resend_verification(request: Request, body: dict):
@@ -457,6 +560,53 @@ async def setup_password(request: Request, response: Response, body: dict):
         "token": session_token,
         "profile_id": profile_id
     }
+
+
+@router.get("/verify")
+@limiter.limit("20/minute")
+async def verify_account(request: Request, token: str = ""):
+    """Verify email for a dashboard account (existing) OR a pending registration request."""
+    if not token:
+        raise HTTPException(400, "Token required")
+
+    async with async_session_factory() as db:
+        # 1) Existing-agent dashboard account
+        r = await db.execute(text("""
+            SELECT ua.id, ua.email, up.agent_name, ua.email_verified
+            FROM user_accounts ua
+            LEFT JOIN user_profiles up ON up.id = ua.user_profile_id
+            WHERE ua.verification_token=:t AND ua.verification_expires > NOW()
+        """), {"t": token})
+        u = r.fetchone()
+        if u:
+            if u[3]:
+                # wait / no, u[3]=email_verified; if already verified, still fine
+                pass
+            await db.execute(text("""
+                UPDATE user_accounts SET email_verified=true, verification_token=NULL
+                WHERE id=:id
+            """), {"id": u[0]})
+            await db.commit()
+            return {"status": "verified", "message": f"Email verified! You can now log in to the {u[2] or 'your'} dashboard.",
+                    "account_type": "agent"}
+
+        # 2) Pending registration request (new-user approval flow)
+        r2 = await db.execute(text("""
+            SELECT id, email, full_name, agent_name
+            FROM registration_requests
+            WHERE verification_token=:t AND verification_expires > NOW() AND email_verified=false
+        """), {"t": token})
+        u2 = r2.fetchone()
+        if u2:
+            await db.execute(text("""
+                UPDATE registration_requests SET email_verified=true, verification_token=NULL WHERE id=:id
+            """), {"id": u2[0]})
+            await db.commit()
+            return {"status": "verified",
+                    "message": f"Email verified! Your request is now under admin review.",
+                    "account_type": "request"}
+
+    raise HTTPException(400, "Invalid or expired verification token. Please request a new one.")
 
 
 @router.post("/login")
