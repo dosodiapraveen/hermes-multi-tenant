@@ -115,8 +115,10 @@ async def update_note(request: Request, note_id: str, body: dict, user: dict = D
 @router.delete("/notes/{note_id}", dependencies=[Depends(require_csrf)])
 async def delete_note(request: Request, note_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM notes WHERE id::text=:n AND user_id::text=:u"), {"n": note_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM notes WHERE id::text=:n AND user_id::text=:u RETURNING id"), {"n": note_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Note not found")
     return {"status": "deleted"}
 
 # ═══════════════════════════ PROJECTS ═══════════════════════════
@@ -181,8 +183,10 @@ async def update_project(request: Request, project_id: str, body: dict, user: di
 @router.delete("/projects/{project_id}", dependencies=[Depends(require_csrf)])
 async def delete_project(request: Request, project_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": project_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM projects WHERE id::text=:p AND user_id::text=:u RETURNING id"), {"p": project_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Project not found")
     return {"status": "deleted"}
 
 @router.post("/projects/{project_id}/research", dependencies=[Depends(require_csrf)])
@@ -207,8 +211,10 @@ async def add_research(request: Request, project_id: str, body: dict, user: dict
 @router.delete("/projects/{project_id}/research/{research_id}", dependencies=[Depends(require_csrf)])
 async def delete_research(request: Request, project_id: str, research_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM project_research WHERE id::text=:r AND project_id::text=:p"), {"r": research_id, "p": project_id})
+        row = (await db.execute(text("DELETE FROM project_research WHERE id::text=:r AND project_id::text=:p RETURNING id"), {"r": research_id, "p": project_id})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Research not found")
     return {"status": "deleted"}
 
 # ═══════════════════════════ REMINDERS ═══════════════════════════
@@ -295,8 +301,10 @@ async def update_reminder(request: Request, reminder_id: str, body: dict, user: 
 @router.delete("/reminders/{reminder_id}", dependencies=[Depends(require_csrf)])
 async def delete_reminder(request: Request, reminder_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM reminders WHERE id::text=:r AND user_id::text=:u"), {"r": reminder_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM reminders WHERE id::text=:r AND user_id::text=:u RETURNING id"), {"r": reminder_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Reminder not found")
     return {"status": "deleted"}
 
 # ═══════════════════════════ ACTIVITY ═══════════════════════════
@@ -383,8 +391,10 @@ async def update_idea(request: Request, idea_id: str, body: dict, user: dict = D
 @router.delete("/ideas/{idea_id}", dependencies=[Depends(require_csrf)])
 async def delete_idea(request: Request, idea_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM ideas WHERE id::text=:i AND user_id::text=:u"), {"i": idea_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM ideas WHERE id::text=:i AND user_id::text=:u RETURNING id"), {"i": idea_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Idea not found")
     return {"status": "deleted"}
 
 # ═══════════════════════════ SCHEDULE/EVENTS ═══════════════════════════
@@ -484,8 +494,10 @@ async def update_event(request: Request, event_id: str, body: dict, user: dict =
 @router.delete("/events/{event_id}", dependencies=[Depends(require_csrf)])
 async def delete_event(request: Request, event_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM scheduled_events WHERE id::text=:e AND user_id::text=:u"), {"e": event_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM scheduled_events WHERE id::text=:e AND user_id::text=:u RETURNING id"), {"e": event_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Event not found")
     return {"status": "deleted"}
 
 # ═══════════════════════════ BACKGROUND JOBS ═══════════════════════════
@@ -604,8 +616,10 @@ async def update_job(request: Request, job_id: str, body: dict, user: dict = Dep
 @router.delete("/jobs/{job_id}", dependencies=[Depends(require_csrf)])
 async def delete_job(request: Request, job_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        await db.execute(text("DELETE FROM background_jobs WHERE id::text=:j AND user_id::text=:u"), {"j": job_id, "u": user["id"]})
+        row = (await db.execute(text("DELETE FROM background_jobs WHERE id::text=:j AND user_id::text=:u RETURNING id"), {"j": job_id, "u": user["id"]})).fetchone()
         await db.commit()
+    if not row:
+        raise HTTPException(404, "Job not found")
     return {"status": "deleted"}
 
 @router.get("/personality")
