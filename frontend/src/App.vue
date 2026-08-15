@@ -58,7 +58,7 @@ export default {
 </script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; background:#F0F2F5; color:#1A1A2E; }
+body { font-family:var(--font-family-base); background:var(--color-background); color:var(--color-text-primary); }
 .app-layout { display:flex; min-height:100vh; }
 .sidebar { width:240px; min-width:240px; background:#1A1A2E; color:#fff; display:flex; flex-direction:column; position:fixed; top:0; left:0; bottom:0; z-index:100; }
 .sidebar-header { display:flex; align-items:center; gap:12px; padding:24px 20px 20px; border-bottom:1px solid rgba(255,255,255,0.06); }
