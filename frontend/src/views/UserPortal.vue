@@ -4,7 +4,7 @@
       <div class="header-content">
         <h1>🏠 {{ user }}</h1>
         <nav>
-          <button v-for="t in tabs" :key="t.key" :class="{active: tab===t.key}" @click="tab=t.key" @click.prevent>{{ t.label }}<span v-if="counts[t.key]" class="badge">{{ counts[t.key] }}</span></button>
+          <button v-for="t in tabs" :key="t.key" :class="{active: tab===t.key}" @click="tab=t.key" @click.prevent>{{ t.label }}</button>
         </nav>
         <button class="btn-outline" @click="logout">Logout</button>
       </div>
@@ -37,7 +37,7 @@
         <div class="grid">
           <div class="card" @click="tab='ideas'"><h3>💡 Ideas</h3><p class="count">{{ ideas.length }}</p></div>
           <div class="card" @click="tab='notes'"><h3>📝 Notes</h3><p class="count">{{ notes.length }}</p></div>
-          <div class="card" @click="tab='reminders'"><h3>⏰ Reminders</h3><p class="count">{{ reminders.filter(r=>!r.done).length }}</p></div>
+          <div class="card" @click="tab='reminders'"><h3>⏰ Pending Reminders</h3><p class="count">{{ reminders.filter(r=>!r.done).length }}</p></div>
           <div class="card" @click="tab='projects'"><h3>📋 Projects</h3><p class="count">{{ projects.length }}</p></div>
         </div>
 
@@ -220,11 +220,17 @@
       <!-- ─────── ACTIVITY ─────── -->
       <section v-if="tab==='activity'">
         <div class="section-header"><h2>📊 Activity</h2></div>
-        <div v-for="a in activity" :key="a.time" class="list-item">
-          <div class="timeline-dot"></div>
-          <div><div class="item-meta">{{ a.time?.slice(0,10) }}</div><div class="item-title">{{ a.action }}</div></div>
+        <div v-for="g in groupedActivity" :key="g.date" class="act-day">
+          <div class="act-day-head">{{ g.label }}</div>
+          <div v-for="e in g.items" :key="e.key" class="act-item">
+            <span class="act-ic">{{ e.icon }}</span>
+            <div class="act-body">
+              <span class="act-title">{{ e.title }}<em v-if="e.count>1" class="act-count"> ×{{ e.count }}</em></span>
+              <span class="act-time">{{ e.time }}</span>
+            </div>
+          </div>
         </div>
-        <p v-if="!activity.length" class="empty">No activity yet.</p>
+        <p v-if="!groupedActivity.length" class="empty">No activity yet.</p>
       </section>
     </main>
 
@@ -381,16 +387,18 @@ export default {
     tabs:[{key:'dashboard',label:'🏠'},{key:'ideas',label:'Ideas'},{key:'notes',label:'Notes'},{key:'schedule',label:'Schedule'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'jobs',label:'Jobs'},{key:'activity',label:'Activity'}],
   }},
   computed:{
-    counts(){
-      return{
-        ideas:this.ideas.filter(i=>i.status==='brainstorm').length,
-        notes:this.notes.length,
-        schedule:this.events.length,
-        reminders:this.reminders.filter(r=>!r.done).length,
-        projects:this.projects.filter(p=>p.status==='active').length,
-        jobs:this.jobs.filter(j=>j.is_enabled).length,
-        activity:this.activity.length
+    groupedActivity(){
+      const days={}
+      for(const a of this.activity||[]){
+        const date=(a.time||'').slice(0,10)
+        if(!date)continue
+        if(!days[date])days[date]={map:{},arr:[]}
+        const d=days[date]
+        const key=(a.action||'')
+        if(d.map[key]){d.map[key].count++}
+        else{const it={key,title:this.actTitle(a),icon:this.actIcon(a),time:(a.time||'').slice(11,16),count:1};d.map[key]=it;d.arr.push(it)}
       }
+      return Object.keys(days).sort((x,y)=>y.localeCompare(x)).map(k=>({date:k,label:this.dayLabel(k),items:days[k].arr}))
     },
     noteCategories(){return[...new Set(this.notes.map(n=>n.category).filter(Boolean))]},
     filteredNotes(){
@@ -405,6 +413,26 @@ export default {
   },
   methods:{
     statusLabel(s){return{active:'🟢 Active',paused:'🟡 Paused',done:'✅ Done',archived:'📦 Archived'}[s]||s},
+    actIcon(a){
+      const s=(a.action||'').toLowerCase()
+      if(s.includes('note'))return '📝'
+      if(s.includes('project'))return '📋'
+      if(s.includes('search'))return '🔍'
+      if(s.includes('remind'))return '⏰'
+      if(s.includes('idea'))return '💡'
+      if(s.includes('event')||s.includes('calendar')||s.includes('schedule'))return '📅'
+      if(s.includes('upload')||s.includes('document')||s.includes('pdf'))return '📎'
+      if(s.includes('message')||s.includes('chat')||s.includes('telegram')||s.includes('sent'))return '💬'
+      if(s.includes('login')||s.includes('auth'))return '🔐'
+      return '•'
+    },
+    actTitle(a){return a.action||'Activity'},
+    dayLabel(date){
+      const t=new Date().toISOString().slice(0,10)
+      if(date===t)return 'Today'
+      const d=new Date(Date.UTC(+date.slice(0,4),+date.slice(5,7)-1,+date.slice(8,10)))
+      return d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})
+    },
     async api(method,url,body){
       try{
         const r=await fetch(url,{method,headers:{'Content-Type':'application/json','Authorization':'Bearer '+this.token},body:body?JSON.stringify(body):undefined})
@@ -674,6 +702,16 @@ main{max-width:960px;margin:0 auto;padding:20px}
 .status-select{padding:6px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:#fff}
 
 .timeline-dot{width:8px;height:8px;background:#6C5CE7;border-radius:50%;margin-top:6px;flex-shrink:0}
+
+/* Activity */
+.act-day{margin-bottom:18px}
+.act-day-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8a8f98;margin-bottom:8px}
+.act-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:#fff;margin-bottom:6px}
+.act-ic{font-size:15px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:#f3f4f6;border-radius:6px;flex-shrink:0}
+.act-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.act-title{font-size:14px;color:#1a1a2e}
+.act-count{font-style:normal;color:#8a8f98;font-size:12px;margin-left:4px}
+.act-time{font-size:12px;color:#a0a5ad}
 
 /* Modal */
 .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;z-index:100}
