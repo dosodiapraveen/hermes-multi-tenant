@@ -11,7 +11,7 @@
     <section class="hero">
       <div class="hero-bg"></div>
       <div class="hero-content">
-        <div class="badge">v0.1 — Now in Beta</div>
+        <div class="badge">Secure · Private · Isolated per user</div>
         <h1>AI Agents for<br/><span class="gradient">Every User.</span></h1>
         <p>Deploy personalized AI agents for your customers in minutes. Each user gets their own isolated agent with Telegram, web access, and a private knowledge vault.</p>
         <div class="hero-actions">
