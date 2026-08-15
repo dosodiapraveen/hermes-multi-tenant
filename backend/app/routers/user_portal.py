@@ -434,10 +434,17 @@ async def create_event(request: Request, body: dict, user: dict = Depends(resolv
     if not event_end:
         raise HTTPException(400, "Event end time required")
 
+    # Parse ISO strings into datetimes (columns are TIMESTAMPTZ)
+    try:
+        start_dt = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(event_end.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, "Invalid date format for event start/end. Use YYYY-MM-DDTHH:MM:SS")
+
     async with async_session_factory() as db:
         r = await db.execute(
             text("INSERT INTO scheduled_events (user_id, title, description, event_start, event_end, location, is_all_day, recurrence) VALUES (:u, :t, :d, :s, :e, :l, :a, :r) RETURNING id, created_at"),
-            {"u": user["id"], "t": title, "d": description, "s": event_start, "e": event_end, "l": location, "a": is_all_day, "r": recurrence},
+            {"u": user["id"], "t": title, "d": description, "s": start_dt, "e": end_dt, "l": location, "a": is_all_day, "r": recurrence},
         )
         await db.commit()
         row = r.fetchone()
@@ -463,8 +470,8 @@ async def update_event(request: Request, event_id: str, body: dict, user: dict =
         params = {"e": event_id}
         if "title" in body: sets.append("title=:t"); params["t"] = body["title"]
         if "description" in body: sets.append("description=:d"); params["d"] = body["description"]
-        if "event_start" in body: sets.append("event_start=:s"); params["s"] = body["event_start"]
-        if "event_end" in body: sets.append("event_end=:end"); params["end"] = body["event_end"]
+        if "event_start" in body: sets.append("event_start=:s"); params["s"] = datetime.fromisoformat(str(body["event_start"]).replace("Z","+00:00"))
+        if "event_end" in body: sets.append("event_end=:end"); params["end"] = datetime.fromisoformat(str(body["event_end"]).replace("Z","+00:00"))
         if "location" in body: sets.append("location=:l"); params["l"] = body["location"]
         if "is_all_day" in body: sets.append("is_all_day=:a"); params["a"] = body["is_all_day"]
         if "recurrence" in body: sets.append("recurrence=:r"); params["r"] = body["recurrence"]
