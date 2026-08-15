@@ -217,7 +217,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showNoteModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveNote">Save</BaseButton>
+        <BaseButton @click="saveNote" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -245,7 +245,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showIdeaModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveIdea">Save</BaseButton>
+        <BaseButton @click="saveIdea" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -276,7 +276,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showEventModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveEvent">Save</BaseButton>
+        <BaseButton @click="saveEvent" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -296,7 +296,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showReminderModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveReminder">Save</BaseButton>
+        <BaseButton @click="saveReminder" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -314,7 +314,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showProjectModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveProject">Save</BaseButton>
+        <BaseButton @click="saveProject" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -332,7 +332,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showResearchModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveResearch">Save</BaseButton>
+        <BaseButton @click="saveResearch" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -352,7 +352,7 @@
       </div>
       <template #footer>
         <BaseButton variant="outline" @click="showJobModal = false">Cancel</BaseButton>
-        <BaseButton @click="saveJob">Save</BaseButton>
+        <BaseButton @click="saveJob" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
@@ -466,6 +466,7 @@ export default {
       confirmVariant: 'danger',
       confirmLoading: false,
       confirmFn: null,
+      busy: false,
 
       // Forms
       noteForm: { title: '', content: '', category: 'General' },
@@ -688,15 +689,21 @@ export default {
     },
 
     async saveNote() {
+      if (this.busy) return
       if (!this.noteForm.title) return
-      const result = this.editingNote
-        ? await this.api('PUT', `/api/me/notes/${this.editingNote.id}`, this.noteForm)
-        : await this.api('POST', '/api/me/notes', this.noteForm)
-      if (result?.error) return
-      this.showToast(this.editingNote ? 'Note updated successfully' : 'Note created successfully')
-      this.showNoteModal = false
-      this.editingNote = null
-      await this.fetchData()
+      this.busy = true
+      try {
+        const result = this.editingNote
+          ? await this.api('PUT', `/api/me/notes/${this.editingNote.id}`, this.noteForm)
+          : await this.api('POST', '/api/me/notes', this.noteForm)
+        if (result?.error) return
+        this.showToast(this.editingNote ? 'Note updated successfully' : 'Note created successfully')
+        this.showNoteModal = false
+        this.editingNote = null
+        await this.fetchData()
+      } finally {
+        this.busy = false
+      }
     },
 
     deleteNote(id) {
