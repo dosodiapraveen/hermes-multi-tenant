@@ -29,6 +29,7 @@ const routes = [
   { path: '/invites', name: 'Invites', component: Invites, meta: { requiresAuth: true } },
   { path: '/usage', name: 'Usage', component: Usage, meta: { requiresAuth: true } },
   { path: '/user', redirect: '/user/dashboard' },
+  { path: '/portal', redirect: '/user/dashboard' },
   { path: '/user/dashboard', name: 'UserPortal', component: UserPortal, meta: { public: true } },
   { path: '/user/register', name: 'UserRegister', component: UserRegister, meta: { public: true } },
   { path: '/user/agent-access', name: 'UserAgentAccess', component: UserAgentAccess, meta: { public: true } },

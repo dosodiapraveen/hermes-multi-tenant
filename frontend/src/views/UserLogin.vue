@@ -202,7 +202,7 @@ export default {
           this.msg = 'Login successful! Redirecting...'
 
           setTimeout(() => {
-            window.location = '/portal'
+            window.location = '/user/dashboard'
           }, 800)
         } else {
           this.msgType = 'error'
