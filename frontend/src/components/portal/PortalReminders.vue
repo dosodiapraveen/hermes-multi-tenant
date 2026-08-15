@@ -64,7 +64,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseButton, BaseEmptyState } from '../ui'
+import { BaseCard, BaseIcon, BaseButton, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalReminders',

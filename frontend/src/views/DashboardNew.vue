@@ -134,8 +134,7 @@
 </template>
 
 <script>
-import { BaseIcon, BaseCard, BaseEmptyState } from '../components/ui'
-import BaseChart from '../components/ui/BaseChart.vue'
+import { BaseIcon, BaseCard, BaseEmptyState, BaseChart } from '@design-system/components/ui'
 
 export default {
   name: 'Dashboard',

@@ -1,4 +1,4 @@
-import BaseBadge from '../components/ui/BaseBadge.vue'
+import { BaseBadge } from '@design-system/components/ui'
 
 export default {
   title: 'UI/BaseBadge',

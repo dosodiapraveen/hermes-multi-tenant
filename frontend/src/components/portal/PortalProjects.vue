@@ -115,7 +115,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseSelect, BaseEmptyState } from '../ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseSelect, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalProjects',

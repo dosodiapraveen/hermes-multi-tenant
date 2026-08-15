@@ -72,7 +72,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState } from '../ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalNotes',

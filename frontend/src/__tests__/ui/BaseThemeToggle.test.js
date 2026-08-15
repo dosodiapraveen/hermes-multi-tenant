@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BaseThemeToggle from '../BaseThemeToggle.vue'
+import BaseThemeToggle from '@design-system/components/ui/BaseThemeToggle.vue'
 
 describe('BaseThemeToggle', () => {
   let localStorageMock

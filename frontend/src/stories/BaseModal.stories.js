@@ -1,7 +1,5 @@
 import { ref } from 'vue'
-import BaseModal from '../components/ui/BaseModal.vue'
-import BaseButton from '../components/ui/BaseButton.vue'
-import BaseInput from '../components/ui/BaseInput.vue'
+import { BaseModal, BaseButton, BaseInput } from '@design-system/components/ui'
 
 export default {
   title: 'UI/BaseModal',

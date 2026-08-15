@@ -1,4 +1,4 @@
-import BaseIcon from '../components/ui/BaseIcon.vue'
+import { BaseIcon } from '@design-system/components/ui'
 
 export default {
   title: 'UI/BaseIcon',

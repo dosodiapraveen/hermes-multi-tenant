@@ -66,7 +66,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseToggle, BaseTooltip, BaseEmptyState } from '../ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseToggle, BaseTooltip, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalJobs',

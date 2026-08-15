@@ -41,7 +41,7 @@
 </template>
 
 <script>
-import { BaseIcon, BaseEmptyState } from '../ui'
+import { BaseIcon, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalActivity',

@@ -161,7 +161,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseEmptyState, BaseSearchFilter } from '../ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseEmptyState, BaseSearchFilter } from '@design-system/components/ui'
 
 export default {
   name: 'PortalDashboard',

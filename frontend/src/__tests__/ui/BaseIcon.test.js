@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BaseIcon from '../BaseIcon.vue'
+import BaseIcon from '@design-system/components/ui/BaseIcon.vue'
 
 describe('BaseIcon', () => {
   it('renders svg element', () => {

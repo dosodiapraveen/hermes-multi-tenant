@@ -1,4 +1,4 @@
-import BaseInput from '../components/ui/BaseInput.vue'
+import { BaseInput } from '@design-system/components/ui'
 
 export default {
   title: 'UI/BaseInput',

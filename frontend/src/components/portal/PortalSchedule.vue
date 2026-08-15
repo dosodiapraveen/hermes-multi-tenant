@@ -67,7 +67,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseEmptyState } from '../ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseEmptyState } from '@design-system/components/ui'
 
 export default {
   name: 'PortalSchedule',

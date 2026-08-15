@@ -68,7 +68,7 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseButton } from '../ui'
+import { BaseCard, BaseIcon, BaseButton } from '@design-system/components/ui'
 
 export default {
   name: 'PortalPersonality',

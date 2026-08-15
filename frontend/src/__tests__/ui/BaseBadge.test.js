@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BaseBadge from '../BaseBadge.vue'
+import BaseBadge from '@design-system/components/ui/BaseBadge.vue'
 
 describe('BaseBadge', () => {
   it('renders label text', () => {

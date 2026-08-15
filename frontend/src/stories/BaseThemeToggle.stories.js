@@ -1,4 +1,4 @@
-import BaseThemeToggle from '../components/ui/BaseThemeToggle.vue'
+import { BaseThemeToggle } from '@design-system/components/ui'
 
 export default {
   title: 'UI/BaseThemeToggle',
