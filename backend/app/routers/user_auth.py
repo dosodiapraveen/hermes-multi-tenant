@@ -240,9 +240,12 @@ async def agent_register(request: Request, body: dict):
         if rem.fetchone():
             raise HTTPException(409, "That email is already in use by another account.")
 
-        # Replace any unverified account for this profile (re-register)
-        await db.execute(text("DELETE FROM user_accounts WHERE user_profile_id::text=:p AND email_verified=false"),
-                         {"p": profile_id})
+        # Replace only an unverified account with the SAME email (re-register same email).
+        # Do NOT delete unverified accounts for OTHER emails — doing so would invalidate
+        # a verification link already sent for that email (caused "Verification Failed").
+        await db.execute(text(
+            "DELETE FROM user_accounts WHERE user_profile_id::text=:p AND email_verified=false AND email=:e"),
+            {"p": profile_id, "e": email})
 
         vtoken = generate_token()
         vlink = f"{FRONTEND_URL}/user/verify?token={vtoken}"
