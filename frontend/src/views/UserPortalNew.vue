@@ -25,10 +25,12 @@
             />
           </button>
         </nav>
-        <BaseThemeToggle />
-        <BaseButton variant="outline" icon="log-out" @click="logout">
-          Logout
-        </BaseButton>
+        <div class="header-actions">
+          <BaseThemeToggle />
+          <BaseButton variant="outline" icon="log-out" @click="logout">
+            <span class="logout-label">Logout</span>
+          </BaseButton>
+        </div>
       </div>
     </header>
 
@@ -892,6 +894,13 @@ export default {
   flex-wrap: wrap;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-left: auto;
+}
+
 .nav-tab {
   display: flex;
   align-items: center;
@@ -1100,6 +1109,30 @@ export default {
 
   .welcome-tips {
     grid-template-columns: 1fr;
+  }
+
+  /* Float theme + logout to a persistent corner so it never takes workspace
+     and is always in reach while scrolling. */
+  .header-actions {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 1000;
+    margin-left: 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg, 12px);
+    padding: 6px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
+    gap: var(--spacing-1);
+  }
+
+  .logout-label {
+    display: none;
+  }
+
+  .portal-main {
+    padding-bottom: 84px;
   }
 }
 </style>
