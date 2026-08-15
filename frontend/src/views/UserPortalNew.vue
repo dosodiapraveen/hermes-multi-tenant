@@ -379,7 +379,11 @@
 </template>
 
 <script>
-import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog } from '../components/ui'
+// Design System imports (shared across projects)
+import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog } from '@design-system/components/ui'
+import { ErrorBoundary } from '@design-system/components/common'
+
+// Project-specific components
 import {
   PortalDashboard,
   PortalNotes,
@@ -392,7 +396,6 @@ import {
   PortalPersonality,
   OnboardingWizard
 } from '../components/portal'
-import ErrorBoundary from '../components/common/ErrorBoundary.vue'
 
 export default {
   name: 'UserPortal',
