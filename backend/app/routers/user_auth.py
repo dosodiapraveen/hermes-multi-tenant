@@ -10,6 +10,7 @@ Security improvements:
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import text
 from app.database import async_session_factory
+from app.services.branded import render_branded_email
 from app.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -290,10 +291,19 @@ async def agent_register(request: Request, body: dict):
     # Send verification email (Resend). Fall back to returning the link if email fails.
     email_sent = False
     try:
-        html = (f"<h2>Set up your {agent_name} dashboard</h2>"
-                f"<p>Verify your email to activate your dashboard access:</p>"
-                f'<a href="{vlink}">Verify email</a>')
-        await send_email(email, "Verify your AddPrepared dashboard email", html)
+        pbody = (f"<p style=\"font-size:15px;line-height:1.6;color:#333;margin:0 0 6px\">"
+                 f"Hi! You're one quick step from your <strong>{agent_name}</strong> dashboard.</p>"
+                 f"<p style=\"font-size:15px;line-height:1.6;color:#555;margin:0 0 6px\">"
+                 f"Please confirm this email address to activate your dashboard access.</p>"
+                 f"<p style=\"font-size:13px;color:#8A8FA6;margin:0\">It takes about 10 seconds — "
+                 f"then you can log in and start chatting with {agent_name}.</p>")
+        html = render_branded_email(
+            "Confirm your email address",
+            pbody,
+            button_text="Verify my email",
+            button_link=vlink,
+        )
+        await send_email(email, f"Welcome — confirm your {agent_name} dashboard email", html)
         email_sent = True
     except Exception as e:
         logger.warning("agent_register_email_failed", error=str(e), recipient=email)
@@ -357,14 +367,13 @@ async def resend_verification(request: Request, body: dict):
     # Send new verification email
     try:
         link = f"{FRONTEND_URL}/user/register/verify?token={new_token}"
-        html = f"""<!DOCTYPE html><html><body style="font-family:-apple-system,sans-serif;max-width:560px;margin:40px auto;padding:20px">
-<h2 style="color:#1A1A2E">Verify your email</h2>
-<p>Hi{f' {full_name}' if full_name else ''},</p>
-<p>Here's a fresh verification link for your registration request:</p>
-<a href="{link}" style="display:block;background:#6C5CE7;color:#fff;padding:14px 24px;border-radius:8px;text-align:center;text-decoration:none;font-size:16px;margin:16px 0;max-width:200px">Verify Email</a>
-<p style="color:#888;font-size:13px">Link expires in 72 hours.</p>
-</body></html>"""
-        await send_email(email, "Verify your email - Hermes", html)
+        pbody = (f"<p style=\"font-size:15px;line-height:1.6;color:#333;margin:0 0 6px\">"
+                 f"Hi{f' {full_name}' if full_name else ' there'}! Here's a fresh link to verify your "
+                 f"registration request.</p>"
+                 f"<p style=\"font-size:13px;color:#8A8FA6;margin:0\">The link is valid for 72 hours.</p>")
+        html = render_branded_email("Confirm your email address", pbody,
+                                    button_text="Verify my email", button_link=link)
+        await send_email(email, "Confirm your email — be prepared", html)
     except Exception as e:
         logger.warning("resend_verification_email_failed", email=email, error=str(e))
 
