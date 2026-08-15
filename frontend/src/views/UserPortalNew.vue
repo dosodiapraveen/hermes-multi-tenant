@@ -198,6 +198,50 @@
     <!-- Toast Notifications -->
     <BaseToast ref="toast" position="bottom-right" />
 
+    <!-- Keyboard Shortcuts Help Modal -->
+    <BaseModal v-model="showKeyboardHelp" title="Keyboard Shortcuts" size="sm">
+      <div class="shortcuts-list">
+        <div class="shortcut-group">
+          <h4>Navigation</h4>
+          <div class="shortcut-item">
+            <kbd>?</kbd>
+            <span>Show this help</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>g</kbd> <kbd>h</kbd>
+            <span>Go to Home</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>g</kbd> <kbd>n</kbd>
+            <span>Go to Notes</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>g</kbd> <kbd>i</kbd>
+            <span>Go to Ideas</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>g</kbd> <kbd>p</kbd>
+            <span>Go to Projects</span>
+          </div>
+        </div>
+        <div class="shortcut-group">
+          <h4>Actions</h4>
+          <div class="shortcut-item">
+            <kbd>n</kbd>
+            <span>New item (context-aware)</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>/</kbd>
+            <span>Focus search</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>Esc</kbd>
+            <span>Close modal / Clear</span>
+          </div>
+        </div>
+      </div>
+    </BaseModal>
+
     <!-- Note Modal -->
     <BaseModal v-model="showNoteModal" :title="editingNote ? 'Edit Note' : 'New Note'">
       <div class="modal-form">
@@ -456,6 +500,10 @@ export default {
       showProjectModal: false,
       showResearchModal: false,
       showJobModal: false,
+      showKeyboardHelp: false,
+
+      // Keyboard shortcut state
+      pendingGoto: false,
 
       // Editing states
       editingNote: null,
@@ -517,16 +565,47 @@ export default {
   watch: {
     tab(v) {
       if (v === 'personality') this.loadPersonality()
+      this.syncTabToUrl(v)
     }
   },
   mounted() {
+    this.readTabFromUrl()
     this.fetchData()
     document.addEventListener('keydown', this.handleKeydown)
+    window.addEventListener('popstate', this.handlePopState)
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.handleKeydown)
+    window.removeEventListener('popstate', this.handlePopState)
   },
   methods: {
+    // URL State Sync
+    readTabFromUrl() {
+      const params = new URLSearchParams(window.location.search)
+      const urlTab = params.get('tab')
+      const validTabs = this.tabs.map(t => t.key)
+      if (urlTab && validTabs.includes(urlTab)) {
+        this.tab = urlTab
+      }
+    },
+
+    syncTabToUrl(tabKey) {
+      const params = new URLSearchParams(window.location.search)
+      if (tabKey && tabKey !== 'dashboard') {
+        params.set('tab', tabKey)
+      } else {
+        params.delete('tab')
+      }
+      const newUrl = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname
+      window.history.replaceState({}, '', newUrl)
+    },
+
+    handlePopState() {
+      this.readTabFromUrl()
+    },
+
     showToast(message, type = 'success') {
       this.$refs.toast?.[type]?.(message) || this.$refs.toast?.add?.({ message, type })
     },
@@ -538,8 +617,14 @@ export default {
     },
 
     handleKeydown(e) {
+      // Don't trigger shortcuts when typing in inputs
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
+      const isEditable = e.target.isContentEditable
+
       if (e.key === 'Escape') {
-        if (this.showNoteModal) this.showNoteModal = false
+        this.pendingGoto = false
+        if (this.showKeyboardHelp) this.showKeyboardHelp = false
+        else if (this.showNoteModal) this.showNoteModal = false
         else if (this.showProjectModal) this.showProjectModal = false
         else if (this.showResearchModal) this.showResearchModal = false
         else if (this.showReminderModal) this.showReminderModal = false
@@ -547,6 +632,78 @@ export default {
         else if (this.showEventModal) this.showEventModal = false
         else if (this.showJobModal) this.showJobModal = false
         else if (this.showWelcome) this.dismissWelcome()
+        return
+      }
+
+      // Skip shortcuts when in input fields
+      if (isInput || isEditable) return
+
+      // Don't trigger when modals are open
+      const modalOpen = this.showNoteModal || this.showIdeaModal || this.showEventModal ||
+        this.showReminderModal || this.showProjectModal || this.showResearchModal ||
+        this.showJobModal || this.showKeyboardHelp
+
+      if (modalOpen) return
+
+      // Show keyboard help
+      if (e.key === '?') {
+        e.preventDefault()
+        this.showKeyboardHelp = true
+        return
+      }
+
+      // Focus search with /
+      if (e.key === '/') {
+        e.preventDefault()
+        this.tab = 'dashboard'
+        this.$nextTick(() => {
+          const searchInput = document.querySelector('.search-container input')
+          searchInput?.focus()
+        })
+        return
+      }
+
+      // Go to shortcuts (g + key)
+      if (this.pendingGoto) {
+        this.pendingGoto = false
+        const gotoMap = {
+          'h': 'dashboard',
+          'd': 'dashboard',
+          'n': 'notes',
+          'i': 'ideas',
+          's': 'schedule',
+          'r': 'reminders',
+          'p': 'projects',
+          'j': 'jobs',
+          'a': 'activity'
+        }
+        if (gotoMap[e.key]) {
+          e.preventDefault()
+          this.tab = gotoMap[e.key]
+        }
+        return
+      }
+
+      if (e.key === 'g') {
+        this.pendingGoto = true
+        setTimeout(() => { this.pendingGoto = false }, 1000)
+        return
+      }
+
+      // New item shortcut (n)
+      if (e.key === 'n') {
+        e.preventDefault()
+        const tabModalMap = {
+          'notes': () => this.openNoteModal(),
+          'ideas': () => this.openIdeaModal(),
+          'schedule': () => this.openEventModal(),
+          'reminders': () => this.openReminderModal(),
+          'projects': () => this.openProjectModal(),
+          'jobs': () => this.openJobModal()
+        }
+        const openFn = tabModalMap[this.tab]
+        if (openFn) openFn()
+        else this.openNoteModal() // Default to note
       }
     },
 
@@ -1345,6 +1502,52 @@ export default {
   background: rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-lg);
   font-size: var(--font-size-sm);
+}
+
+/* Keyboard Shortcuts */
+.shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+}
+
+.shortcut-group h4 {
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.shortcut-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) 0;
+}
+
+.shortcut-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 var(--spacing-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  background: var(--color-gray-100);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.shortcut-item span {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 /* Modal Form */

@@ -16,6 +16,16 @@
         </p>
         <p v-if="searchError" class="search-status error">{{ searchError }}</p>
 
+        <!-- Screen reader announcement for search results -->
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          class="sr-only"
+        >
+          {{ searchAnnouncement }}
+        </div>
+
         <div v-if="searchResults.length" class="search-results">
           <div class="results-header">Top matches</div>
           <div
@@ -184,6 +194,15 @@ export default {
     }
   },
   computed: {
+    searchAnnouncement() {
+      if (this.searching) return 'Searching...'
+      if (this.searchError) return `Search failed: ${this.searchError}`
+      if (this.searchResults.length === 0 && this.searchQ) return 'No results found'
+      if (this.searchResults.length > 0) {
+        return `Found ${this.searchResults.length} result${this.searchResults.length === 1 ? '' : 's'} for "${this.searchQ}"`
+      }
+      return ''
+    },
     pendingReminders() {
       return this.reminders.filter(r => !r.done).length
     },
@@ -287,6 +306,19 @@ export default {
 </script>
 
 <style scoped>
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .dashboard-section {
   display: flex;
   flex-direction: column;

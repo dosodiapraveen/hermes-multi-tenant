@@ -42,6 +42,11 @@
           <span class="note-date">{{ formatDate(note.updated_at) }}</span>
         </div>
 
+        <!-- Content Preview (when collapsed) -->
+        <p v-if="expandedId !== note.id && note.content" class="note-preview">
+          {{ truncateContent(note.content) }}
+        </p>
+
         <Transition name="expand">
           <div v-if="expandedId === note.id" class="note-body">
             <p>{{ note.content }}</p>
@@ -128,6 +133,12 @@ export default {
     formatDate(date) {
       if (!date) return ''
       return date.slice(0, 10)
+    },
+    truncateContent(content, maxLength = 120) {
+      if (!content) return ''
+      const cleaned = content.replace(/\n+/g, ' ').trim()
+      if (cleaned.length <= maxLength) return cleaned
+      return cleaned.slice(0, maxLength).trim() + '...'
     }
   }
 }
@@ -192,6 +203,17 @@ export default {
 .note-date {
   font-size: var(--font-size-xs);
   color: var(--color-text-tertiary);
+}
+
+.note-preview {
+  margin: var(--spacing-2) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  line-height: var(--line-height-normal);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .note-body {
