@@ -4,3 +4,7 @@ beprepared.dev, www.beprepared.dev {
 
     reverse_proxy frontend:80
 }
+
+queue.beprepared.dev {
+    reverse_proxy agentqueue-api:8000
+}
