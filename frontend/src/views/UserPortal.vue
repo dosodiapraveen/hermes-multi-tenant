@@ -314,20 +314,55 @@
     <div v-if="showEventModal" class="modal-overlay" @click.self="showEventModal=false">
       <div class="modal">
         <h2>{{ editingEvent ? 'Edit' : 'New' }} Event</h2>
-        <input v-model="eventForm.title" placeholder="Event title" />
+        <input v-model="eventForm.title" placeholder="Event title" autofocus />
         <textarea v-model="eventForm.description" placeholder="Description" rows="2"></textarea>
-        <div class="modal-row">
+
+        <!-- Date (shared) + quick same-day helpers -->
+        <div class="event-date-row">
           <div style="flex:1">
-            <label style="font-size:12px;color:#666;display:block;margin-bottom:4px">Start</label>
-            <input v-model="eventForm.event_start" type="datetime-local" />
+            <label class="fld">Date</label>
+            <input v-model="eventForm.date" type="date" class="event-date" />
           </div>
-          <div style="flex:1">
-            <label style="font-size:12px;color:#666;display:block;margin-bottom:4px">End</label>
-            <input v-model="eventForm.event_end" type="datetime-local" />
+          <div class="quick-dates">
+            <button class="chip" :class="{on:eventForm.date===todayStr}" @click="eventForm.date=todayStr; autoTimes(false)">Today</button>
+            <button class="chip" :class="{on:eventForm.date===tomorrowStr}" @click="eventForm.date=tomorrowStr">Tomorrow</button>
           </div>
         </div>
+
+        <template v-if="!eventForm.is_all_day">
+          <div class="event-times">
+            <div class="time-block">
+              <label class="fld">Starts</label>
+              <div class="time-controls">
+                <select v-model="eventForm.startH" @change="autoEndFromStart"><option v-for="h in 12" :key="h" :value="h">{{ h }}</option></select>
+                <select v-model="eventForm.startMin" @change="autoEndFromStart">
+                  <option v-for="m in ['00','15','30','45']" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <div class="ampm">
+                  <button :class="{on:eventForm.startAP==='AM'}" @click="eventForm.startAP='AM'; autoEndFromStart()">AM</button>
+                  <button :class="{on:eventForm.startAP==='PM'}" @click="eventForm.startAP='PM'; autoEndFromStart()">PM</button>
+                </div>
+              </div>
+            </div>
+            <div class="time-block">
+              <label class="fld">Ends</label>
+              <div class="time-controls">
+                <select v-model="eventForm.endH" @click="endTouched=true"><option v-for="h in 12" :key="h" :value="h">{{ h }}</option></select>
+                <select v-model="eventForm.endMin" @click="endTouched=true">
+                  <option v-for="m in ['00','15','30','45']" :key="m" :value="m">{{ m }}</option>
+                </select>
+                <div class="ampm">
+                  <button :class="{on:eventForm.endAP==='AM'}" @click="eventForm.endAP='AM'; endTouched=true">AM</button>
+                  <button :class="{on:eventForm.endAP==='PM'}" @click="eventForm.endAP='PM'; endTouched=true">PM</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="hint">End auto-sets to 1&nbsp;hour after start. Edit it freely if it differs.</p>
+        </template>
+
         <input v-model="eventForm.location" placeholder="Location (optional)" />
-        <label style="font-size:13px;display:flex;align-items:center;gap:8px;margin:8px 0">
+        <label class="all-day-row">
           <input type="checkbox" v-model="eventForm.is_all_day" />
           <span>All-day event</span>
         </label>
@@ -382,11 +417,13 @@ export default {
     showResearchModal:false, researchForm:{title:'',content:''},
     showReminderModal:false, reminderForm:{title:'',remind_at:''},
     showIdeaModal:false, editingIdea:null, ideaForm:{title:'',content:'',status:'brainstorm',tags:''},
-    showEventModal:false, editingEvent:null, eventForm:{title:'',description:'',event_start:'',event_end:'',location:'',is_all_day:false},
+    showEventModal:false, editingEvent:null, endTouched:false, eventForm:{title:'',description:'',date:'',startH:12,startMin:'00',startAP:'AM',endH:1,endMin:'00',endAP:'PM',location:'',is_all_day:false},
     showJobModal:false, editingJob:null, jobForm:{title:'',description:'',job_type:'custom',cron_expression:'0 9 * * *'},
     tabs:[{key:'dashboard',label:'🏠'},{key:'ideas',label:'Ideas'},{key:'notes',label:'Notes'},{key:'schedule',label:'Schedule'},{key:'reminders',label:'Reminders'},{key:'projects',label:'Projects'},{key:'jobs',label:'Jobs'},{key:'activity',label:'Activity'}],
   }},
   computed:{
+    todayStr(){ return new Date().toISOString().slice(0,10) },
+    tomorrowStr(){ const d=new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10) },
     groupedActivity(){
       const days={}
       for(const a of this.activity||[]){
@@ -575,26 +612,67 @@ export default {
 
     // Schedule/Events
     formatEventDate(dt){if(!dt)return'';const d=new Date(dt);return d.toLocaleDateString()+' '+d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})},
+    // ── event time helpers ──
+    ampmTo24(h,ap){ h=Number(h); return ap==='PM' ? (h===12?12:h+12) : (h===12?0:h) },
+    to12(min){ let h24=Math.floor(min/60), m=min%60; const ap=h24>=12?'PM':'AM'; let h=h24%12; if(h===0)h=12; return {h:Number(h), m:String(m).padStart(2,'0'), ap} },
+    localDateStr(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` },
+    parseISOTime(iso){
+      const d=new Date(iso); if(isNaN(d)) return null
+      const t=this.to12(d.getHours()*60+d.getMinutes())
+      return {...t}
+    },
+    // default start = next 15-min slot, end = +1h
+    autoTimes(){
+      const now=new Date(); let min=now.getHours()*60+now.getMinutes(); min=Math.ceil(min/15)*15; if(min>=1440)min=0
+      const s=this.to12(min), e=this.to12(Math.min(min+60,1140))
+      this.eventForm.startH=s.h; this.eventForm.startMin=s.m; this.eventForm.startAP=s.ap
+      this.eventForm.endH=e.h; this.eventForm.endMin=e.m; this.eventForm.endAP=e.ap; this.endTouched=false
+    },
+    // keep End in sync with Start unless user edited End
+    autoEndFromStart(){
+      if(this.endTouched) return
+      const s=this.ampmTo24(this.eventForm.startH,this.eventForm.startAP)*60+Number(this.eventForm.startMin)
+      const e=this.to12(Math.min(s+60,1140))
+      this.eventForm.endH=e.h; this.eventForm.endMin=e.m; this.eventForm.endAP=e.ap
+    },
+    // build ISO [[YYYY-MM-DD]T[HH:MM]:00 from form fields
+    buildEventISO(dateField,h,m,ap){
+      if(!dateField) return ''
+      const h24=this.ampmTo24(h,ap)
+      return `${dateField}T${String(h24).padStart(2,'0')}:${m}:00`
+    },
     openEventModal(evt){
       this.editingEvent=evt||null
-      this.eventForm={
-        title:evt?.title||'',
-        description:evt?.description||'',
-        event_start:evt?.event_start||'',
-        event_end:evt?.event_end||'',
-        location:evt?.location||'',
-        is_all_day:evt?.is_all_day||false
+      this.eventForm={title:evt?.title||'',description:evt?.description||'',date:'',startH:12,startMin:'00',startAP:'AM',endH:1,endMin:'00',endAP:'PM',location:evt?.location||'',is_all_day:evt?.is_all_day||false}
+      if(evt){
+        const s=this.parseISOTime(evt.event_start), e=this.parseISOTime(evt.event_end)
+        this.eventForm.date=this.localDateStr(new Date(evt.event_start))
+        if(s){this.eventForm.startH=s.h;this.eventForm.startMin=s.m;this.eventForm.startAP=s.ap}
+        if(e){this.eventForm.endH=e.h;this.eventForm.endMin=e.m;this.eventForm.endAP=e.ap}
+        this.endTouched=true
+      }else{
+        this.eventForm.date=this.todayStr
+        this.autoTimes()
       }
       this.showEventModal=true
     },
     async saveEvent(){
-      if(!this.eventForm.title||!this.eventForm.event_start||!this.eventForm.event_end)return
-      if(this.editingEvent){
-        await this.api('PUT',`/api/me/events/${this.editingEvent.id}`,this.eventForm)
+      if(!this.eventForm.title||!this.eventForm.date)return
+      let payload
+      if(this.eventForm.is_all_day){
+        payload={...this.eventForm,event_start:this.eventForm.date+'T00:00:00',event_end:this.eventForm.date+'T23:59:00'}
       }else{
-        await this.api('POST','/api/me/events',this.eventForm)
+        const es=this.buildEventISO(this.eventForm.date,this.eventForm.startH,this.eventForm.startMin,this.eventForm.startAP)
+        const ee=this.buildEventISO(this.eventForm.date,this.eventForm.endH,this.eventForm.endMin,this.eventForm.endAP)
+        payload={...this.eventForm,event_start:es,event_end:ee}
       }
-      this.showEventModal=false;this.editingEvent=null;await this.fetchData()
+      delete payload.date; delete payload.startH; delete payload.startMin; delete payload.startAP; delete payload.endH; delete payload.endMin; delete payload.endAP
+      if(this.editingEvent){
+        await this.api('PUT',`/api/me/events/${this.editingEvent.id}`,payload)
+      }else{
+        await this.api('POST','/api/me/events',payload)
+      }
+      this.showEventModal=false;this.editingEvent=null;this.endTouched=false;await this.fetchData()
     },
     async deleteEvent(id){
       if(!confirm('Delete this event?'))return
@@ -651,6 +729,24 @@ nav button .badge{position:absolute;top:-4px;right:-4px;background:#ff4757;color
 .btn-primary{background:#6C5CE7;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:14px}
 .btn-sm{padding:4px 10px;font-size:12px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer}
 .btn-danger{color:#e74c3c;border-color:#e74c3c}
+
+.event-date-row{display:flex;gap:10px;align-items:flex-end;margin:8px 0}
+.event-date{flex:1;padding:10px 12px;border:1.5px solid #DFE6E9;border-radius:8px;font-size:13px}
+.quick-dates{display:flex;gap:6px}
+.chip{padding:7px 12px;border:1.5px solid #DFE6E9;background:#F8FAFC;border-radius:20px;font-size:12px;color:#404A4E;cursor:pointer;white-space:nowrap}
+.chip.on{background:#6C5CE7;border-color:#6C5CE7;color:#fff}
+.event-times{display:flex;gap:14px;margin:8px 0}
+.time-block{flex:1}
+.time-controls{display:flex;gap:6px;align-items:center}
+.time-controls select{padding:9px 6px;border:1.5px solid #DFE6E9;border-radius:8px;font-size:13px;background:#fff}
+.time-controls select:first-child{flex:1.2}
+.time-controls select:nth-child(2){flex:1}
+.ampm{display:flex;border:1.5px solid #DFE6E9;border-radius:8px;overflow:hidden}
+.ampm button{border:none;background:#fff;padding:9px 10px;font-size:12px;cursor:pointer;color:#404A4E}
+.ampm button.on{background:#6C5CE7;color:#fff}
+.fld{font-size:12px;color:#666;display:block;margin-bottom:4px}
+.hint{font-size:11px;color:#8A9498;margin:-2px 0 6px}
+.all-day-row{font-size:13px;display:flex;align-items:center;gap:8px;margin:8px 0}
 
 main{max-width:960px;margin:0 auto;padding:20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}
