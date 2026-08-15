@@ -1,0 +1,10 @@
+// Portal Section Components
+export { default as PortalDashboard } from './PortalDashboard.vue'
+export { default as PortalNotes } from './PortalNotes.vue'
+export { default as PortalIdeas } from './PortalIdeas.vue'
+export { default as PortalSchedule } from './PortalSchedule.vue'
+export { default as PortalReminders } from './PortalReminders.vue'
+export { default as PortalProjects } from './PortalProjects.vue'
+export { default as PortalJobs } from './PortalJobs.vue'
+export { default as PortalActivity } from './PortalActivity.vue'
+export { default as PortalPersonality } from './PortalPersonality.vue'

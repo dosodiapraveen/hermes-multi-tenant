@@ -1,15 +1,19 @@
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
+
+// Design System
+import './styles/design-tokens.css'
+
 import App from './App.vue'
 import Landing from './views/Landing.vue'
 import Login from './views/Login.vue'
 import AdminLogin from './views/AdminLogin.vue'
-import Dashboard from './views/Dashboard.vue'
+import Dashboard from './views/DashboardNew.vue'
 import Users from './views/Users.vue'
 import Invites from './views/Invites.vue'
 import Join from './views/Join.vue'
 import Usage from './views/Usage.vue'
-import UserPortal from './views/UserPortal.vue'
+import UserPortal from './views/UserPortalNew.vue'
 import UserRegister from './views/UserRegister.vue'
 import UserAgentAccess from './views/UserAgentAccess.vue'
 import UserLogin from './views/UserLogin.vue'
