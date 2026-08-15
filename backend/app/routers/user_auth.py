@@ -14,7 +14,7 @@ from app.config import settings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import bcrypt, secrets, httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.logging_config import get_logger
 from app.services.audit_logger import audit_logger, AuditLogger
 from app.cookie_auth import set_portal_auth_cookies, clear_portal_cookies
@@ -186,12 +186,19 @@ async def agent_info(token: str = ""):
         raise HTTPException(400, "token required")
     async with async_session_factory() as db:
         r = await db.execute(text(
-            "SELECT agent_name, is_active FROM user_profiles WHERE id::text=:t"), {"t": token})
+            "SELECT agent_name, is_active, signup_token, signup_expires FROM user_profiles "
+            "WHERE id::text=:t OR signup_token=:t"), {"t": token})
         p = r.fetchone()
         if not p:
             raise HTTPException(404, "Invalid link token")
         if not p[1]:
             raise HTTPException(400, "This agent is inactive")
+        # If resolved via a one-time signup token, enforce expiry
+        if p[2] and p[2] == token:
+            ex = p[3]
+            if ex is None or (ex.tzinfo is not None and ex < datetime.now(timezone.utc)) \
+               or (ex.tzinfo is None and ex < datetime.utcnow()):
+                raise HTTPException(400, "This access link has expired. Ask your admin for a new one.")
     return {"agent_name": p[0] or "Agent"}
 
 
@@ -218,13 +225,21 @@ async def agent_register(request: Request, body: dict):
         raise HTTPException(400, "Password must be at least 12 chars with upper, lower and a digit")
 
     async with async_session_factory() as db:
-        # Profile must exist (bound to a configured agent)
+        # Profile must exist (bound to a configured agent); resolve via one-time
+        # signup token OR the legacy profile UUID. Enforce expiry for signup tokens.
         rp = await db.execute(text(
-            "SELECT id, agent_name FROM user_profiles WHERE id::text=:t"), {"t": token})
+            "SELECT id, agent_name, signup_token, signup_expires FROM user_profiles "
+            "WHERE id::text=:t OR signup_token=:t"), {"t": token})
         prof = rp.fetchone()
         if not prof:
             raise HTTPException(404, "Agent not found. Please use the link provided by your admin.")
         profile_id, agent_name = str(prof[0]), prof[1] or "Agent"
+        used_token = prof[2] == token if prof[2] else False
+        if used_token:
+            ex = prof[3]
+            if ex is None or (ex.tzinfo is not None and ex < datetime.now(timezone.utc)) \
+               or (ex.tzinfo is None and ex < datetime.utcnow()):
+                raise HTTPException(400, "This access link has expired. Ask your admin for a new one.")
 
         # Refuse if a VERIFIED account already exists for this profile
         rex = await db.execute(text(
@@ -256,6 +271,14 @@ async def agent_register(request: Request, body: dict):
             VALUES (:p, :e, :h, false, :vt, NOW() + INTERVAL '72 hours')
         """), {"p": profile_id, "e": email, "h": hash_password(password), "vt": vtoken})
         await db.commit()
+
+    # Consume the one-time signup link so it can't be reused.
+    if used_token:
+        async with async_session_factory() as db2:
+            await db2.execute(text(
+                "UPDATE user_profiles SET signup_token=NULL, signup_expires=NULL WHERE id::text=:pid"),
+                {"pid": profile_id})
+            await db2.commit()
 
     # Verify token resolves against user_accounts (defensive round-trip)
     async with async_session_factory() as db:

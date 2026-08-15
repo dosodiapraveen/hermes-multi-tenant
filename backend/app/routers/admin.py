@@ -200,9 +200,9 @@ async def test_email(body: dict = Body(...)):
 
 @router.post("/users/{user_id}/access-link")
 async def generate_access_link(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Generate a dashboard access link for an EXISTING agent (no approval needed).
-    The link carries the profile UUID as a capability token; whoever registers
-    with it must still verify their email before login.
+    """Generate a fresh, ONE-TIME, expiring dashboard access link for an EXISTING
+    agent. Each click produces a new random token (not the profile UUID). The token
+    is consumed on successful registration and expires after 72h.
     """
     r = await db.execute(text(
         "SELECT agent_name, is_active FROM user_profiles WHERE id::text=:id"), {"id": user_id})
@@ -212,8 +212,14 @@ async def generate_access_link(user_id: str, db: AsyncSession = Depends(get_db))
     if not p[1]:
         raise HTTPException(400, "Agent is inactive")
 
-    url = f"https://beprepared.dev/user/agent-access?token={user_id}"
-    return {"agent_name": p[0] or "Agent", "access_link": url, "user_id": user_id}
+    signup_token = secrets.token_urlsafe(32)
+    await db.execute(text(
+        "UPDATE user_profiles SET signup_token=:tok, signup_expires=NOW() + INTERVAL '72 hours' WHERE id::text=:id"),
+        {"tok": signup_token, "id": user_id})
+    await db.commit()
+
+    url = f"https://beprepared.dev/user/agent-access?token={signup_token}"
+    return {"agent_name": p[0] or "Agent", "access_link": url, "expires_in": "72h"}
 
 
 @router.post("/users/{user_id}/timezone")
