@@ -1,0 +1,3 @@
+[submodule "frontend/src/design-system"]
+	path = frontend/src/design-system
+	url = https://github.com/dosodiapraveen/agentic-design-system.git
