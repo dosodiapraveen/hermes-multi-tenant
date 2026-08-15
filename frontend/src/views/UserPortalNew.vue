@@ -601,7 +601,7 @@ export default {
       await this.api('DELETE', `/api/me/notes/${id}`)
       this.showToast('Note deleted')
       await this.fetchData()
-      }
+      })
     },
 
     // Ideas
@@ -635,7 +635,7 @@ export default {
       await this.api('DELETE', `/api/me/ideas/${id}`)
       this.showToast('Idea deleted')
       await this.fetchData()
-      }
+      })
     },
 
     // Events
@@ -697,7 +697,7 @@ export default {
       await this.api('DELETE', `/api/me/events/${id}`)
       this.showToast('Event deleted')
       await this.fetchData()
-      }
+      })
     },
 
     // Reminders
@@ -724,7 +724,7 @@ export default {
       await this.api('DELETE', `/api/me/reminders/${id}`)
       this.showToast('Reminder deleted')
       await this.fetchData()
-      }
+      })
     },
 
     // Projects
@@ -767,7 +767,7 @@ export default {
       this.showToast('Project deleted')
       await this.fetchData()
       this.selectedProject = null
-      }
+      })
     },
 
     // Research
@@ -789,7 +789,7 @@ export default {
       await this.api('DELETE', `/api/me/projects/${pid}/research/${rid}`)
       this.showToast('Research deleted')
       this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
-      }
+      })
     },
 
     // Jobs
@@ -825,9 +825,9 @@ export default {
 
     deleteJob(id) {
       this.askConfirm('Delete this background job?', async () => {
-        await this.api('DELETE', `/api/me/jobs/${id}`)
-        this.showToast('Job deleted')
-        await this.fetchData()
+      await this.api('DELETE', `/api/me/jobs/${id}`)
+      this.showToast('Job deleted')
+      await this.fetchData()
       })
     },
 
