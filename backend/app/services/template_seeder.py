@@ -234,11 +234,11 @@ async def seed_project_templates():
                     "cat": tmpl["category"],
                     "ind": tmpl["industry"],
                     "data": json.dumps(tmpl["template_data"]),
-                    "tasks": json.dumps(tmpl["default_tasks"]),
-                    "research": json.dumps(tmpl["default_research_topics"]),
+                    "tasks": tmpl["default_tasks"],
+                    "research": tmpl["default_research_topics"],
                     "icon": tmpl["icon"],
                     "color": tmpl["color"],
-                    "tags": json.dumps(tmpl["tags"]),
+                    "tags": tmpl["tags"],
                     "featured": tmpl["is_featured"]
                 }
             )
@@ -375,11 +375,11 @@ async def seed_workflow_templates():
                     "desc": wf["description"],
                     "type": wf["workflow_type"],
                     "steps": json.dumps(wf["steps"]),
-                    "prompts": json.dumps(wf["prompts"]),
+                    "prompts": wf["prompts"],
                     "duration": wf["expected_duration_minutes"],
                     "icon": wf["icon"],
                     "diff": wf["difficulty"],
-                    "tags": json.dumps(wf["tags"]),
+                    "tags": wf["tags"],
                     "featured": wf["is_featured"]
                 }
             )
@@ -509,10 +509,10 @@ async def seed_conversation_examples():
                     "cat": ex["category"],
                     "starter": ex["starter_prompt"],
                     "response": ex["example_response"],
-                    "followups": json.dumps(ex["follow_up_prompts"]),
+                    "followups": ex["follow_up_prompts"],
                     "icon": ex["icon"],
                     "diff": ex["difficulty"],
-                    "tags": json.dumps(ex["tags"]),
+                    "tags": ex["tags"],
                     "featured": ex["is_featured"]
                 }
             )
