@@ -11,6 +11,6 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
       - run: ssh-keyscan 167.233.158.68 >> ~/.ssh/known_hosts
-      - run: ssh root@167.233.158.68 "cd /opt/hermes-multi-tenant && git fetch origin && git reset --hard origin/main && docker compose up -d --build"
+      - run: ssh root@167.233.158.68 "cd /opt/hermes-multi-tenant && git fetch origin && git reset --hard origin/main && git submodule update --init --recursive && docker compose up -d --build"
       - name: Apply DB migrations
         run: ssh root@167.233.158.68 "cd /opt/hermes-multi-tenant && bash run_migrations.sh --fix-schema"
