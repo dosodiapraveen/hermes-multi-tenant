@@ -285,27 +285,27 @@ export default {
 }
 
 .badge-primary {
-  background: var(--color-primary-100);
+  background: var(--color-primary-200);
   color: var(--color-primary-700);
 }
 
 .badge-success {
-  background: var(--color-success-100);
+  background: var(--color-success-200);
   color: var(--color-success-700);
 }
 
 .badge-warning {
-  background: var(--color-warning-100);
+  background: var(--color-warning-200);
   color: var(--color-warning-700);
 }
 
 .badge-error {
-  background: var(--color-error-100);
+  background: var(--color-error-200);
   color: var(--color-error-700);
 }
 
 .badge-info {
-  background: var(--color-info-100);
+  background: var(--color-info-200);
   color: var(--color-info-700);
 }
 </style>

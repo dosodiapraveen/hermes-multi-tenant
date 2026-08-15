@@ -258,7 +258,45 @@
 
   /* Adjusted primary for dark mode */
   --color-primary-50: #252542;
-  --color-primary-100: #2D2D52;
+  --color-primary-100: rgba(108, 92, 231, 0.15);
+  --color-primary-200: rgba(108, 92, 231, 0.25);
+  --color-primary-500: #8B7CF7;
+  --color-primary-600: #A99BFF;
+
+  /* Adjusted success (green) for dark mode */
+  --color-success-50: rgba(16, 172, 132, 0.08);
+  --color-success-100: rgba(16, 172, 132, 0.15);
+  --color-success-200: rgba(16, 172, 132, 0.25);
+  --color-success-500: #34D399;
+  --color-success-600: #6EE7B7;
+
+  /* Adjusted warning (amber/yellow) for dark mode */
+  --color-warning-50: rgba(245, 158, 11, 0.08);
+  --color-warning-100: rgba(245, 158, 11, 0.15);
+  --color-warning-200: rgba(245, 158, 11, 0.25);
+  --color-warning-500: #FBBF24;
+  --color-warning-600: #FCD34D;
+
+  /* Adjusted error (red/pink) for dark mode */
+  --color-error-50: rgba(239, 68, 68, 0.08);
+  --color-error-100: rgba(239, 68, 68, 0.15);
+  --color-error-200: rgba(239, 68, 68, 0.25);
+  --color-error-500: #F87171;
+  --color-error-600: #FCA5A5;
+
+  /* Adjusted info (blue) for dark mode */
+  --color-info-50: rgba(59, 130, 246, 0.08);
+  --color-info-100: rgba(59, 130, 246, 0.15);
+  --color-info-200: rgba(59, 130, 246, 0.25);
+  --color-info-500: #60A5FA;
+  --color-info-600: #93C5FD;
+  --color-info-700: #BFDBFE;
+
+  /* Adjusted semantic -700 for dark mode text on colored backgrounds */
+  --color-primary-700: #C4B5FD;
+  --color-success-700: #A7F3D0;
+  --color-warning-700: #FDE68A;
+  --color-error-700: #FECACA;
 
   /* Adjusted grays for dark mode */
   --color-gray-50: #1A1A2E;
@@ -292,8 +330,43 @@
     --color-text-secondary: #D1D5DB;
     --color-text-tertiary: #9CA3AF;
     --color-text-disabled: #4B5563;
+    /* Adjusted primary for dark mode */
     --color-primary-50: #252542;
-    --color-primary-100: #2D2D52;
+    --color-primary-100: rgba(108, 92, 231, 0.15);
+    --color-primary-200: rgba(108, 92, 231, 0.25);
+    --color-primary-500: #8B7CF7;
+    --color-primary-600: #A99BFF;
+    /* Adjusted success (green) for dark mode */
+    --color-success-50: rgba(16, 172, 132, 0.08);
+    --color-success-100: rgba(16, 172, 132, 0.15);
+    --color-success-200: rgba(16, 172, 132, 0.25);
+    --color-success-500: #34D399;
+    --color-success-600: #6EE7B7;
+    /* Adjusted warning (amber/yellow) for dark mode */
+    --color-warning-50: rgba(245, 158, 11, 0.08);
+    --color-warning-100: rgba(245, 158, 11, 0.15);
+    --color-warning-200: rgba(245, 158, 11, 0.25);
+    --color-warning-500: #FBBF24;
+    --color-warning-600: #FCD34D;
+    /* Adjusted error (red/pink) for dark mode */
+    --color-error-50: rgba(239, 68, 68, 0.08);
+    --color-error-100: rgba(239, 68, 68, 0.15);
+    --color-error-200: rgba(239, 68, 68, 0.25);
+    --color-error-500: #F87171;
+    --color-error-600: #FCA5A5;
+    /* Adjusted info (blue) for dark mode */
+    --color-info-50: rgba(59, 130, 246, 0.08);
+    --color-info-100: rgba(59, 130, 246, 0.15);
+    --color-info-200: rgba(59, 130, 246, 0.25);
+    --color-info-500: #60A5FA;
+    --color-info-600: #93C5FD;
+    --color-info-700: #BFDBFE;
+    /* Adjusted semantic -700 for dark mode text on colored backgrounds */
+    --color-primary-700: #C4B5FD;
+    --color-success-700: #A7F3D0;
+    --color-warning-700: #FDE68A;
+    --color-error-700: #FECACA;
+    /* Adjusted grays for dark mode */
     --color-gray-50: #1A1A2E;
     --color-gray-100: #252542;
     --color-gray-200: #2D2D44;

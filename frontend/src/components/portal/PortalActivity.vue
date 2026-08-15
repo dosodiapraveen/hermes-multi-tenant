@@ -187,33 +187,33 @@ export default {
 }
 
 .activity-icon.icon-default {
-  background: var(--color-gray-100);
-  color: var(--color-gray-600);
+  background: var(--color-gray-200);
+  color: var(--color-gray-700);
 }
 
 .activity-icon.icon-notes {
-  background: var(--color-primary-100);
-  color: var(--color-primary-600);
+  background: var(--color-primary-200);
+  color: var(--color-primary-700);
 }
 
 .activity-icon.icon-projects {
-  background: var(--color-success-100);
-  color: var(--color-success-600);
+  background: var(--color-success-200);
+  color: var(--color-success-700);
 }
 
 .activity-icon.icon-ideas {
-  background: var(--color-warning-100);
-  color: var(--color-warning-600);
+  background: var(--color-warning-200);
+  color: var(--color-warning-700);
 }
 
 .activity-icon.icon-reminders {
-  background: var(--color-error-100);
-  color: var(--color-error-600);
+  background: var(--color-error-200);
+  color: var(--color-error-700);
 }
 
 .activity-icon.icon-schedule {
-  background: var(--color-info-100);
-  color: var(--color-info-600);
+  background: var(--color-info-200);
+  color: var(--color-info-700);
 }
 
 .activity-content {

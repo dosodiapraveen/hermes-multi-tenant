@@ -306,23 +306,23 @@ export default {
 }
 
 .stat-icon.users {
-  background: var(--color-primary-100);
-  color: var(--color-primary-600);
+  background: var(--color-primary-200);
+  color: var(--color-primary-700);
 }
 
 .stat-icon.agents {
-  background: var(--color-success-100);
-  color: var(--color-success-600);
+  background: var(--color-success-200);
+  color: var(--color-success-700);
 }
 
 .stat-icon.tokens {
-  background: var(--color-warning-100);
-  color: var(--color-warning-600);
+  background: var(--color-warning-200);
+  color: var(--color-warning-700);
 }
 
 .stat-icon.total {
-  background: var(--color-info-100);
-  color: var(--color-info-600);
+  background: var(--color-info-200);
+  color: var(--color-info-700);
 }
 
 .stat-info {
@@ -353,12 +353,12 @@ export default {
 }
 
 .stat-trend.up {
-  background: var(--color-success-100);
+  background: var(--color-success-200);
   color: var(--color-success-700);
 }
 
 .stat-trend.down {
-  background: var(--color-error-100);
+  background: var(--color-error-200);
   color: var(--color-error-700);
 }
 
@@ -404,18 +404,18 @@ export default {
 }
 
 .activity-icon.user {
-  background: var(--color-primary-100);
-  color: var(--color-primary-600);
+  background: var(--color-primary-200);
+  color: var(--color-primary-700);
 }
 
 .activity-icon.agent {
-  background: var(--color-success-100);
-  color: var(--color-success-600);
+  background: var(--color-success-200);
+  color: var(--color-success-700);
 }
 
 .activity-icon.message {
-  background: var(--color-info-100);
-  color: var(--color-info-600);
+  background: var(--color-info-200);
+  color: var(--color-info-700);
 }
 
 .activity-icon.system {
