@@ -731,15 +731,21 @@ export default {
     },
 
     async saveIdea() {
-      if (!this.ideaForm.title) return
-      const result = this.editingIdea
-        ? await this.api('PUT', `/api/me/ideas/${this.editingIdea.id}`, this.ideaForm)
-        : await this.api('POST', '/api/me/ideas', this.ideaForm)
-      if (result?.error) return
-      this.showToast(this.editingIdea ? 'Idea updated successfully' : 'Idea created successfully')
-      this.showIdeaModal = false
-      this.editingIdea = null
-      await this.fetchData()
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.ideaForm.title) return
+            const result = this.editingIdea
+              ? await this.api('PUT', `/api/me/ideas/${this.editingIdea.id}`, this.ideaForm)
+              : await this.api('POST', '/api/me/ideas', this.ideaForm)
+            if (result?.error) return
+            this.showToast(this.editingIdea ? 'Idea updated successfully' : 'Idea created successfully')
+            this.showIdeaModal = false
+            this.editingIdea = null
+            await this.fetchData()
+      } finally {
+        this.busy = false
+      }
     },
 
     deleteIdea(id) {
@@ -774,27 +780,33 @@ export default {
     },
 
     async saveEvent() {
-      if (!this.eventForm.title || !this.eventForm.datetime) return
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.eventForm.title || !this.eventForm.datetime) return
 
-      const payload = {
-        title: this.eventForm.title,
-        description: this.eventForm.description,
-        location: this.eventForm.location,
-        is_all_day: this.eventForm.is_all_day,
-        event_start: this.eventForm.datetime,
-        event_end: this.eventForm.is_all_day
-          ? this.eventForm.datetime.slice(0, 10) + 'T23:59:00'
-          : this.addHour(this.eventForm.datetime)
+            const payload = {
+              title: this.eventForm.title,
+              description: this.eventForm.description,
+              location: this.eventForm.location,
+              is_all_day: this.eventForm.is_all_day,
+              event_start: this.eventForm.datetime,
+              event_end: this.eventForm.is_all_day
+                ? this.eventForm.datetime.slice(0, 10) + 'T23:59:00'
+                : this.addHour(this.eventForm.datetime)
+            }
+
+            const result = this.editingEvent
+              ? await this.api('PUT', `/api/me/events/${this.editingEvent.id}`, payload)
+              : await this.api('POST', '/api/me/events', payload)
+            if (result?.error) return
+            this.showToast(this.editingEvent ? 'Event updated successfully' : 'Event scheduled successfully')
+            this.showEventModal = false
+            this.editingEvent = null
+            await this.fetchData()
+      } finally {
+        this.busy = false
       }
-
-      const result = this.editingEvent
-        ? await this.api('PUT', `/api/me/events/${this.editingEvent.id}`, payload)
-        : await this.api('POST', '/api/me/events', payload)
-      if (result?.error) return
-      this.showToast(this.editingEvent ? 'Event updated successfully' : 'Event scheduled successfully')
-      this.showEventModal = false
-      this.editingEvent = null
-      await this.fetchData()
     },
 
     addHour(datetime) {
@@ -819,12 +831,18 @@ export default {
     },
 
     async saveReminder() {
-      if (!this.reminderForm.title || !this.reminderForm.remind_at) return
-      const result = await this.api('POST', '/api/me/reminders', this.reminderForm)
-      if (result?.error) return
-      this.showToast('Reminder set successfully')
-      this.showReminderModal = false
-      await this.fetchData()
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.reminderForm.title || !this.reminderForm.remind_at) return
+            const result = await this.api('POST', '/api/me/reminders', this.reminderForm)
+            if (result?.error) return
+            this.showToast('Reminder set successfully')
+            this.showReminderModal = false
+            await this.fetchData()
+      } finally {
+        this.busy = false
+      }
     },
 
     async toggleReminder(r) {
@@ -854,15 +872,21 @@ export default {
     },
 
     async saveProject() {
-      if (!this.projectForm.title) return
-      const result = this.editingProject
-        ? await this.api('PUT', `/api/me/projects/${this.editingProject.id}`, this.projectForm)
-        : await this.api('POST', '/api/me/projects', this.projectForm)
-      if (result?.error) return
-      this.showToast(this.editingProject ? 'Project updated successfully' : 'Project created successfully')
-      this.showProjectModal = false
-      this.editingProject = null
-      await this.fetchData()
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.projectForm.title) return
+            const result = this.editingProject
+              ? await this.api('PUT', `/api/me/projects/${this.editingProject.id}`, this.projectForm)
+              : await this.api('POST', '/api/me/projects', this.projectForm)
+            if (result?.error) return
+            this.showToast(this.editingProject ? 'Project updated successfully' : 'Project created successfully')
+            this.showProjectModal = false
+            this.editingProject = null
+            await this.fetchData()
+      } finally {
+        this.busy = false
+      }
     },
 
     async selectProject(p) {
@@ -892,12 +916,18 @@ export default {
     },
 
     async saveResearch() {
-      if (!this.researchForm.title || !this.selectedProject) return
-      const result = await this.api('POST', `/api/me/projects/${this.selectedProject.id}/research`, this.researchForm)
-      if (result?.error) return
-      this.showToast('Research added to project')
-      this.showResearchModal = false
-      this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.researchForm.title || !this.selectedProject) return
+            const result = await this.api('POST', `/api/me/projects/${this.selectedProject.id}/research`, this.researchForm)
+            if (result?.error) return
+            this.showToast('Research added to project')
+            this.showResearchModal = false
+            this.selectedProject = await this.api('GET', `/api/me/projects/${this.selectedProject.id}`)
+      } finally {
+        this.busy = false
+      }
     },
 
     deleteResearch(pid, rid) {
@@ -922,15 +952,21 @@ export default {
     },
 
     async saveJob() {
-      if (!this.jobForm.title) return
-      const result = this.editingJob
-        ? await this.api('PUT', `/api/me/jobs/${this.editingJob.id}`, this.jobForm)
-        : await this.api('POST', '/api/me/jobs', this.jobForm)
-      if (result?.error) return
-      this.showToast(this.editingJob ? 'Job updated successfully' : 'Job created successfully')
-      this.showJobModal = false
-      this.editingJob = null
-      await this.fetchData()
+      if (this.busy) return
+      this.busy = true
+      try {
+            if (!this.jobForm.title) return
+            const result = this.editingJob
+              ? await this.api('PUT', `/api/me/jobs/${this.editingJob.id}`, this.jobForm)
+              : await this.api('POST', '/api/me/jobs', this.jobForm)
+            if (result?.error) return
+            this.showToast(this.editingJob ? 'Job updated successfully' : 'Job created successfully')
+            this.showJobModal = false
+            this.editingJob = null
+            await this.fetchData()
+      } finally {
+        this.busy = false
+      }
     },
 
     async toggleJob(job) {
