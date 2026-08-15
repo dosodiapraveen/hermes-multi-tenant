@@ -57,14 +57,14 @@ export default {
     async load() { const r=await fetch('/api/admin/users',{headers:{'Authorization':this.tok()}}); this.users=await r.json() },
     confirmDelete(u) { this.deletingUser=u; this.showDialog=true; this.deleting=false },
     async genLink(u) {
-      this.$set(u,'linkBusy',true)
+      u.linkBusy=true
       try {
         const r=await fetch('/api/admin/users/'+u.id+'/access-link',{method:'POST',headers:{'Authorization':this.tok()}})
         const d=await r.json().catch(()=>({}))
         if(!r.ok) throw new Error(d.detail||'Failed')
         this.copied=false; this.linkResult={ agent:d.agent_name, url:d.access_link }
       } catch(e) { this.linkResult={ agent:u.agent_name, url:'', error:e.message } }
-      finally { this.$set(u,'linkBusy',false) }
+      finally { u.linkBusy=false }
     },
     copylabel() { return this.copied ? 'Copied ✓' : 'Copy' },
     async copyLink() {
