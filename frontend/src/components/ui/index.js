@@ -15,6 +15,7 @@ export { default as BaseDateTimePicker } from './BaseDateTimePicker.vue'
 export { default as BaseEmptyState } from './BaseEmptyState.vue'
 export { default as BaseSearchFilter } from './BaseSearchFilter.vue'
 export { default as BaseChart } from './BaseChart.vue'
+export { default as BaseThemeToggle } from './BaseThemeToggle.vue'
 
 // Plugin for global registration
 export const HermesUI = {
@@ -33,7 +34,8 @@ export const HermesUI = {
       BaseTooltip: () => import('./BaseTooltip.vue'),
       BaseDateTimePicker: () => import('./BaseDateTimePicker.vue'),
       BaseEmptyState: () => import('./BaseEmptyState.vue'),
-      BaseSearchFilter: () => import('./BaseSearchFilter.vue')
+      BaseSearchFilter: () => import('./BaseSearchFilter.vue'),
+      BaseThemeToggle: () => import('./BaseThemeToggle.vue')
     }
 
     // Register components globally (async)

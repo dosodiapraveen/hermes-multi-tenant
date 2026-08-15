@@ -25,6 +25,7 @@
             />
           </button>
         </nav>
+        <BaseThemeToggle />
         <BaseButton variant="outline" icon="log-out" @click="logout">
           Logout
         </BaseButton>
@@ -341,7 +342,7 @@
 </template>
 
 <script>
-import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker } from '../components/ui'
+import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle } from '../components/ui'
 import {
   PortalDashboard,
   PortalNotes,
@@ -365,6 +366,7 @@ export default {
     BaseSelect,
     BaseToast,
     BaseDateTimePicker,
+    BaseThemeToggle,
     PortalDashboard,
     PortalNotes,
     PortalIdeas,

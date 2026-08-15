@@ -5,15 +5,33 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest --project unit",
+    "test:ui": "vitest --project unit --ui",
+    "test:coverage": "vitest --project unit --coverage",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "vue": "^3.4.0",
-    "vue-router": "^4.3.0",
-    "@supabase/supabase-js": "^2.45.0"
+    "vue-router": "^4.3.0"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "latest",
+    "@storybook/addon-a11y": "^10.5.8",
+    "@storybook/addon-docs": "^10.5.8",
+    "@storybook/addon-onboarding": "^10.5.8",
+    "@storybook/addon-vitest": "^10.5.8",
+    "@storybook/vue3-vite": "^10.5.8",
     "@vitejs/plugin-vue": "^5.0.0",
-    "vite": "^5.4.0"
+    "@vitest/browser-playwright": "latest",
+    "@vitest/coverage-v8": "latest",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.11.2",
+    "playwright": "latest",
+    "storybook": "^10.5.8",
+    "vite": "^5.4.0",
+    "vitest": "^4.1.10"
   }
 }
