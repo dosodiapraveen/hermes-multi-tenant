@@ -256,7 +256,7 @@
     </BaseModal>
 
     <!-- Note Modal -->
-    <BaseModal v-model="showNoteModal" :title="editingNote ? 'Edit Note' : 'New Note'">
+    <BaseModal v-model="showNoteModal" :title="editingNote ? 'Edit Note' : 'New Note'" :persistent="isFormDirty('note')">
       <div class="modal-form">
         <BaseInput v-model="noteForm.title" label="Title" placeholder="Note title" required />
         <BaseInput
@@ -273,13 +273,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showNoteModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showNoteModal', 'note')">Cancel</BaseButton>
         <BaseButton @click="saveNote" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Idea Modal -->
-    <BaseModal v-model="showIdeaModal" :title="editingIdea ? 'Edit Idea' : 'New Idea'">
+    <BaseModal v-model="showIdeaModal" :title="editingIdea ? 'Edit Idea' : 'New Idea'" :persistent="isFormDirty('idea')">
       <div class="modal-form">
         <BaseInput v-model="ideaForm.title" label="Title" placeholder="Idea title" required />
         <BaseInput
@@ -301,13 +301,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showIdeaModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showIdeaModal', 'idea')">Cancel</BaseButton>
         <BaseButton @click="saveIdea" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Event Modal -->
-    <BaseModal v-model="showEventModal" :title="editingEvent ? 'Edit Event' : 'New Event'" size="lg">
+    <BaseModal v-model="showEventModal" :title="editingEvent ? 'Edit Event' : 'New Event'" size="lg" :persistent="isFormDirty('event')">
       <div class="modal-form">
         <BaseInput v-model="eventForm.title" label="Title" placeholder="Event title" required />
         <BaseInput
@@ -332,13 +332,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showEventModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showEventModal', 'event')">Cancel</BaseButton>
         <BaseButton @click="saveEvent" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Reminder Modal -->
-    <BaseModal v-model="showReminderModal" title="New Reminder">
+    <BaseModal v-model="showReminderModal" title="New Reminder" :persistent="isFormDirty('reminder')">
       <div class="modal-form">
         <BaseInput
           v-model="reminderForm.title"
@@ -352,13 +352,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showReminderModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showReminderModal', 'reminder')">Cancel</BaseButton>
         <BaseButton @click="saveReminder" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Project Modal -->
-    <BaseModal v-model="showProjectModal" :title="editingProject ? 'Edit Project' : 'New Project'">
+    <BaseModal v-model="showProjectModal" :title="editingProject ? 'Edit Project' : 'New Project'" :persistent="isFormDirty('project')">
       <div class="modal-form">
         <BaseInput v-model="projectForm.title" label="Title" placeholder="Project title" required />
         <BaseInput
@@ -370,13 +370,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showProjectModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showProjectModal', 'project')">Cancel</BaseButton>
         <BaseButton @click="saveProject" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Research Modal -->
-    <BaseModal v-model="showResearchModal" title="Add Research">
+    <BaseModal v-model="showResearchModal" title="Add Research" :persistent="isFormDirty('research')">
       <div class="modal-form">
         <BaseInput v-model="researchForm.title" label="Title" placeholder="Research title" required />
         <BaseInput
@@ -388,13 +388,13 @@
         />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showResearchModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showResearchModal', 'research')">Cancel</BaseButton>
         <BaseButton @click="saveResearch" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
 
     <!-- Job Modal -->
-    <BaseModal v-model="showJobModal" :title="editingJob ? 'Edit Job' : 'New Job'">
+    <BaseModal v-model="showJobModal" :title="editingJob ? 'Edit Job' : 'New Job'" :persistent="isFormDirty('job')">
       <div class="modal-form">
         <BaseInput v-model="jobForm.title" label="Title" placeholder="Job title" required />
         <BaseInput
@@ -408,7 +408,7 @@
         <BaseSelect v-model="jobForm.cron_expression" label="Schedule" :options="cronOptions" />
       </div>
       <template #footer>
-        <BaseButton variant="outline" @click="showJobModal = false">Cancel</BaseButton>
+        <BaseButton variant="outline" @click="tryCloseModal('showJobModal', 'job')">Cancel</BaseButton>
         <BaseButton @click="saveJob" :disabled="busy">Save</BaseButton>
       </template>
     </BaseModal>
@@ -541,6 +541,18 @@ export default {
       researchForm: { title: '', content: '' },
       jobForm: { title: '', description: '', job_type: 'custom', cron_expression: '0 9 * * *' },
 
+      // Initial form states for dirty checking
+      initialNoteForm: null,
+      initialIdeaForm: null,
+      initialEventForm: null,
+      initialReminderForm: null,
+      initialProjectForm: null,
+      initialResearchForm: null,
+      initialJobForm: null,
+
+      // Pending close confirmation
+      pendingCloseModal: null,
+
       // Options
       tabs: [
         { key: 'dashboard', label: 'Home', icon: 'home' },
@@ -586,14 +598,26 @@ export default {
     this.fetchData()
     document.addEventListener('keydown', this.handleKeydown)
     window.addEventListener('popstate', this.handlePopState)
+    window.addEventListener('beforeunload', this.handleBeforeUnload)
   },
   beforeUnmount() {
     document.removeEventListener('keydown', this.handleKeydown)
     window.removeEventListener('popstate', this.handlePopState)
+    window.removeEventListener('beforeunload', this.handleBeforeUnload)
   },
   computed: {
     isMac() {
       return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    },
+    // Check if any form has unsaved changes
+    hasUnsavedChanges() {
+      return this.isFormDirty('note') ||
+             this.isFormDirty('idea') ||
+             this.isFormDirty('event') ||
+             this.isFormDirty('reminder') ||
+             this.isFormDirty('project') ||
+             this.isFormDirty('research') ||
+             this.isFormDirty('job')
     }
   },
   methods: {
@@ -626,6 +650,51 @@ export default {
 
     showToast(message, type = 'success') {
       this.$refs.toast?.[type]?.(message) || this.$refs.toast?.add?.({ message, type })
+    },
+
+    // Unsaved changes handling
+    handleBeforeUnload(e) {
+      if (this.hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    },
+
+    isFormDirty(formType) {
+      const formMap = {
+        note: { form: 'noteForm', initial: 'initialNoteForm', modal: 'showNoteModal' },
+        idea: { form: 'ideaForm', initial: 'initialIdeaForm', modal: 'showIdeaModal' },
+        event: { form: 'eventForm', initial: 'initialEventForm', modal: 'showEventModal' },
+        reminder: { form: 'reminderForm', initial: 'initialReminderForm', modal: 'showReminderModal' },
+        project: { form: 'projectForm', initial: 'initialProjectForm', modal: 'showProjectModal' },
+        research: { form: 'researchForm', initial: 'initialResearchForm', modal: 'showResearchModal' },
+        job: { form: 'jobForm', initial: 'initialJobForm', modal: 'showJobModal' }
+      }
+
+      const config = formMap[formType]
+      if (!config || !this[config.modal] || !this[config.initial]) return false
+
+      const current = this[config.form]
+      const initial = this[config.initial]
+
+      return JSON.stringify(current) !== JSON.stringify(initial)
+    },
+
+    tryCloseModal(modalName, formType) {
+      if (this.isFormDirty(formType)) {
+        this.pendingCloseModal = modalName
+        this.askConfirm(
+          'You have unsaved changes. Discard them?',
+          () => {
+            this[modalName] = false
+            this.pendingCloseModal = null
+          },
+          { title: 'Unsaved Changes', variant: 'warning' }
+        )
+      } else {
+        this[modalName] = false
+      }
     },
 
     handleError({ error, info }) {
@@ -878,6 +947,8 @@ export default {
         content: note?.content || '',
         category: note?.category || 'General'
       }
+      // Save initial state for dirty checking
+      this.initialNoteForm = JSON.parse(JSON.stringify(this.noteForm))
       this.showNoteModal = true
     },
 
@@ -917,6 +988,7 @@ export default {
         status: idea?.status || 'brainstorm',
         tags: idea?.tags || ''
       }
+      this.initialIdeaForm = JSON.parse(JSON.stringify(this.ideaForm))
       this.showIdeaModal = true
     },
 
@@ -957,6 +1029,7 @@ export default {
         location: evt?.location || '',
         is_all_day: evt?.is_all_day || false
       }
+      // Set default time for new events, then save initial state
       if (!evt) {
         const now = new Date()
         const min = now.getHours() * 60 + now.getMinutes()
@@ -966,6 +1039,7 @@ export default {
         const today = now.toISOString().slice(0, 10)
         this.eventForm.datetime = `${today}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
       }
+      this.initialEventForm = JSON.parse(JSON.stringify(this.eventForm))
       this.showEventModal = true
     },
 
@@ -1017,6 +1091,7 @@ export default {
     // Reminders
     openReminderModal() {
       this.reminderForm = { title: '', remind_at: '' }
+      this.initialReminderForm = JSON.parse(JSON.stringify(this.reminderForm))
       this.showReminderModal = true
     },
 
@@ -1058,6 +1133,7 @@ export default {
         title: proj?.title || '',
         description: proj?.description || ''
       }
+      this.initialProjectForm = JSON.parse(JSON.stringify(this.projectForm))
       this.showProjectModal = true
     },
 
@@ -1102,6 +1178,7 @@ export default {
     // Research
     openResearchModal() {
       this.researchForm = { title: '', content: '' }
+      this.initialResearchForm = JSON.parse(JSON.stringify(this.researchForm))
       this.showResearchModal = true
     },
 
@@ -1138,6 +1215,7 @@ export default {
         job_type: job?.job_type || 'custom',
         cron_expression: job?.cron_expression || '0 9 * * *'
       }
+      this.initialJobForm = JSON.parse(JSON.stringify(this.jobForm))
       this.showJobModal = true
     },
 

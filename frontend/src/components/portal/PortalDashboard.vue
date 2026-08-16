@@ -27,7 +27,9 @@
         </div>
 
         <div v-if="searchResults.length" class="search-results">
-          <div class="results-header">Top matches</div>
+          <div class="results-header">
+            Found {{ searchResults.length }} result{{ searchResults.length === 1 ? '' : 's' }}
+          </div>
           <div
             v-for="r in searchResults"
             :key="r.type + '-' + r.id"
@@ -42,6 +44,13 @@
             <span class="result-score">{{ Math.round(r.score * 100) }}%</span>
           </div>
           <button class="clear-results" @click="clearSearch">Clear results</button>
+        </div>
+
+        <!-- No results state -->
+        <div v-else-if="searchQ && !searching && !searchError" class="search-no-results">
+          <BaseIcon name="search" :size="24" />
+          <p>No results found for "<strong>{{ searchQ }}</strong>"</p>
+          <span class="no-results-hint">Try different keywords or check your spelling</span>
         </div>
       </div>
     </BaseCard>
@@ -190,7 +199,31 @@ export default {
       searchQ: '',
       searchResults: [],
       searching: false,
-      searchError: ''
+      searchError: '',
+      searchDebounceTimer: null
+    }
+  },
+  watch: {
+    searchQ(val) {
+      // Clear previous timer
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer)
+      }
+      // Clear results if search is empty
+      if (!val.trim()) {
+        this.searchResults = []
+        this.searchError = ''
+        return
+      }
+      // Debounce search by 300ms
+      this.searchDebounceTimer = setTimeout(() => {
+        this.doSearch()
+      }, 300)
+    }
+  },
+  beforeUnmount() {
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer)
     }
   },
   computed: {
@@ -413,6 +446,26 @@ export default {
 
 .clear-results:hover {
   text-decoration: underline;
+}
+
+.search-no-results {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-6) var(--spacing-4);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.search-no-results p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.no-results-hint {
+  font-size: var(--font-size-xs);
 }
 
 /* Stats Grid */
