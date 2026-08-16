@@ -137,7 +137,7 @@ def main():
     check("agent reply is CLEAN", clean_reply(r), detail=repr(r[:80]))
 
     print("\n-- DASHBOARD -> AGENT visibility --")
-    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_dashEv", "datetime": "2026-12-09T09:00:00"})
+    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_dashEv", "event_start": "2026-12-09T09:00:00", "event_end": "2026-12-09T10:00:00"})
     check("add event via dashboard", st == 200)
     r, lat = agent_chat(UID, "List your scheduled events. Reply with ONLY their titles, comma separated.")
     check("agent sees dashboard event", UNIQ and "dashEv" in r, detail=repr(r[:120]), latency=lat)
