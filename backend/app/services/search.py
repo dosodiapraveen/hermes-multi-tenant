@@ -55,50 +55,53 @@ def _cosine(a: List[float], b: List[float]) -> float:
 
 
 async def _collect_blobs(uid: str, db) -> List[dict]:
-    """Gather all searchable text blobs for a user across sources."""
+    """Gather all searchable text blobs for a user across sources.
+
+    Uses UNION ALL for single query instead of 5 separate queries.
+    """
+    # Single query with UNION ALL - much more efficient than 5 separate queries
+    cur = await db.execute(text("""
+        SELECT 'note' as type, id::text as sid, title, content
+        FROM notes WHERE user_id::text = :u
+
+        UNION ALL
+
+        SELECT 'project' as type, id::text as sid, title, description as content
+        FROM projects WHERE user_id::text = :u
+
+        UNION ALL
+
+        SELECT 'research' as type, pr.id::text as sid, pr.title, pr.content
+        FROM project_research pr
+        JOIN projects p ON p.id = pr.project_id
+        WHERE p.user_id::text = :u
+
+        UNION ALL
+
+        SELECT 'idea' as type, id::text as sid, title, content
+        FROM ideas WHERE user_id::text = :u
+
+        UNION ALL
+
+        SELECT 'reminder' as type, id::text as sid, title, title as content
+        FROM reminders WHERE user_id::text = :u
+    """), {"u": uid})
+
     blobs: List[dict] = []
-    cur = await db.execute(text(
-        "SELECT id::text, title, content FROM notes WHERE user_id::text=:u"
-    ), {"u": uid})
     for row in cur.fetchall():
-        blobs.append({"type": "note", "sid": row[0], "title": row[1] or "",
-                      "content": f"{row[1] or ''}\n{row[2] or ''}"})
+        blobs.append({
+            "type": row[0],
+            "sid": row[1],
+            "title": row[2] or "",
+            "content": f"{row[2] or ''}\n{row[3] or ''}"
+        })
 
-    cur = await db.execute(text(
-        "SELECT id::text, title, description FROM projects WHERE user_id::text=:u"
-    ), {"u": uid})
-    for row in cur.fetchall():
-        blobs.append({"type": "project", "sid": row[0], "title": row[1] or "",
-                      "content": f"{row[1] or ''}\n{row[2] or ''}"})
-
-    cur = await db.execute(text(
-        "SELECT pr.id::text, pr.title, pr.content FROM project_research pr "
-        "JOIN projects p ON p.id=pr.project_id WHERE p.user_id::text=:u"
-    ), {"u": uid})
-    for row in cur.fetchall():
-        blobs.append({"type": "research", "sid": row[0], "title": row[1] or "",
-                      "content": f"{row[1] or ''}\n{row[2] or ''}"})
-
-    cur = await db.execute(text(
-        "SELECT id::text, title, content FROM ideas WHERE user_id::text=:u"
-    ), {"u": uid})
-    for row in cur.fetchall():
-        blobs.append({"type": "idea", "sid": row[0], "title": row[1] or "",
-                      "content": f"{row[1] or ''}\n{row[2] or ''}"})
-
-    cur = await db.execute(text(
-        "SELECT id::text, title FROM reminders WHERE user_id::text=:u"
-    ), {"u": uid})
-    for row in cur.fetchall():
-        blobs.append({"type": "reminder", "sid": row[0], "title": row[1] or "",
-                      "content": row[1] or ""})
-
-    # Vault markdown files (Inbox)
+    # Vault markdown files (Inbox) - still need filesystem access
     try:
         from pathlib import Path
         inbox = Path("/opt/hermes/obsidian") / uid / "Inbox"
         if inbox.exists():
-            for f in sorted(inbox.glob("*.md")):
+            for f in sorted(inbox.glob("*.md"))[:20]:  # Limit to 20 vault files
                 text_content = f.read_text(errors="ignore")
                 title = text_content.split("\n")[0].replace("#", "").strip()[:120] or f.stem
                 blobs.append({"type": "vault", "sid": f.name, "title": title,

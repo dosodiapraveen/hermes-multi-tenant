@@ -6,6 +6,7 @@ SECURITY IMPROVEMENTS:
 - Rate limiting on expensive operations
 - Uses dedicated session_token instead of verification_token
 - SSE streaming for real-time chat responses
+- TTL caching for session resolution (performance)
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -16,6 +17,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from pathlib import Path
 from datetime import datetime
+from cachetools import TTLCache
 import json
 import secrets
 import asyncio
@@ -25,11 +27,17 @@ limiter = Limiter(key_func=get_remote_address)
 
 OBSIDIAN_ROOT = Path("/opt/hermes/obsidian")
 
+# TTL cache for session token resolution (60 second TTL, max 500 entries)
+# This avoids hitting the database on every API request
+_session_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
+
+
 async def resolve_user(request: Request) -> dict:
     """Resolve user from session token with expiration validation.
 
     SECURITY: Uses dedicated session_token with expiration check.
     Supports both cookie and Authorization header for backward compatibility.
+    PERFORMANCE: Caches resolved sessions for 60 seconds.
     """
     # Try cookie first (new method)
     token = request.cookies.get("portal_token")
@@ -42,6 +50,13 @@ async def resolve_user(request: Request) -> dict:
     if not token:
         raise HTTPException(401, "Missing auth token")
 
+    # Check cache first
+    if token in _session_cache:
+        cached = _session_cache[token]
+        if cached.get("error"):
+            raise HTTPException(cached["error"]["code"], cached["error"]["message"])
+        return cached
+
     async with async_session_factory() as db:
         # SECURITY FIX: Check session_token with expiration
         # ALSO accept a long-lived agent_token (Hermes bridge) — reversible/rotatable.
@@ -50,19 +65,23 @@ async def resolve_user(request: Request) -> dict:
             FROM user_accounts ua
             JOIN user_profiles up ON up.id = ua.user_profile_id
             WHERE (ua.session_token=:t AND ua.session_expires > NOW())
-               OR ua.agent_token=:t
-              AND ua.email_verified=true
+               OR (ua.agent_token=:t AND ua.email_verified=true)
         """), {"t": token})
         u = r.fetchone()
 
         if not u:
+            # Cache negative results too (shorter TTL via separate logic could be added)
+            _session_cache[token] = {"error": {"code": 401, "message": "Invalid or expired session. Please login again."}}
             raise HTTPException(401, "Invalid or expired session. Please login again.")
 
         # Check account is active
         if not u[2]:
+            _session_cache[token] = {"error": {"code": 403, "message": "Account disabled. Please contact support."}}
             raise HTTPException(403, "Account disabled. Please contact support.")
 
-        return {"id": str(u[0]), "name": u[1]}
+        result = {"id": str(u[0]), "name": u[1]}
+        _session_cache[token] = result
+        return result
 
 # ═══════════════════════════ NOTES ═══════════════════════════
 
@@ -146,7 +165,7 @@ async def delete_note(request: Request, note_id: str, user: dict = Depends(resol
 async def list_projects(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, description, status, updated_at FROM projects WHERE user_id::text=:uid ORDER BY updated_at DESC"),
+            text("SELECT id, title, description, status, updated_at FROM projects WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 100"),
             {"uid": user["id"]},
         )
         projects = [{"id": str(row[0]), "title": row[1], "description": row[2], "status": row[3], "updated_at": str(row[4])[:19] if row[4] else ""} for row in r.fetchall()]
@@ -177,7 +196,7 @@ async def get_project(project_id: str, user: dict = Depends(resolve_user)):
         p = r.fetchone()
         if not p: raise HTTPException(404, "Project not found")
         # Get research notes
-        rr = await db.execute(text("SELECT id, title, content, created_at FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC"), {"p": project_id})
+        rr = await db.execute(text("SELECT id, title, content, created_at FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC LIMIT 50"), {"p": project_id})
         research = [{"id": str(row[0]), "title": row[1], "content": row[2], "created_at": str(row[3])[:19]} for row in rr.fetchall()]
         return {
             "id": str(p[0]), "title": p[1], "description": p[2], "status": p[3],
@@ -267,7 +286,7 @@ async def reindex_data(request: Request, user: dict = Depends(resolve_user)):
 async def list_reminders(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, remind_at, done, created_at FROM reminders WHERE user_id::text=:uid ORDER BY remind_at ASC"),
+            text("SELECT id, title, remind_at, done, created_at FROM reminders WHERE user_id::text=:uid ORDER BY remind_at ASC LIMIT 100"),
             {"uid": user["id"]},
         )
         reminders = [
@@ -364,7 +383,7 @@ async def list_ideas(status: str = None, user: dict = Depends(resolve_user)):
         if status:
             query += " AND status=:status"
             params["status"] = status
-        query += " ORDER BY updated_at DESC"
+        query += " ORDER BY updated_at DESC LIMIT 100"
         r = await db.execute(text(query), params)
         ideas = [
             {
@@ -438,7 +457,7 @@ async def list_events(from_date: str = None, to_date: str = None, user: dict = D
         if to_date:
             query += " AND event_start <= :to_date"
             params["to_date"] = to_date
-        query += " ORDER BY event_start ASC"
+        query += " ORDER BY event_start ASC LIMIT 200"
         r = await db.execute(text(query), params)
         events = [
             {
@@ -566,7 +585,7 @@ def calculate_next_run(cron_expression: str) -> str:
 async def list_jobs(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, description, job_type, cron_expression, is_enabled, last_run_at, next_run_at, last_result FROM background_jobs WHERE user_id::text=:uid ORDER BY created_at DESC"),
+            text("SELECT id, title, description, job_type, cron_expression, is_enabled, last_run_at, next_run_at, last_result FROM background_jobs WHERE user_id::text=:uid ORDER BY created_at DESC LIMIT 50"),
             {"uid": user["id"]},
         )
         jobs = [

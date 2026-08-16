@@ -41,6 +41,32 @@ ON ideas(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_data_embeddings_user
 ON user_data_embeddings(user_id);
 
+-- Index for analytics events (frequent filtering by category/type)
+CREATE INDEX IF NOT EXISTS idx_analytics_events_category_type
+ON analytics_events(event_category, event_type, user_id);
+
+-- Index for template usage queries
+CREATE INDEX IF NOT EXISTS idx_template_usage_user_type
+ON template_usage(user_id, template_type);
+
+-- Index for registration requests status lookup
+CREATE INDEX IF NOT EXISTS idx_registration_requests_status
+ON registration_requests(status)
+WHERE status IN ('pending', 'approved');
+
+-- Index for scheduled events by user (calendar queries)
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_user
+ON scheduled_events(user_id, event_start);
+
+-- Index for background jobs by user
+CREATE INDEX IF NOT EXISTS idx_background_jobs_user
+ON background_jobs(user_id);
+
+-- Partial index for active scheduled events
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_upcoming
+ON scheduled_events(user_id, event_start)
+WHERE event_start >= CURRENT_DATE;
+
 -- Analyze tables to update statistics after adding indexes
 ANALYZE user_accounts;
 ANALYZE reminders;
@@ -50,3 +76,8 @@ ANALYZE notes;
 ANALYZE projects;
 ANALYZE ideas;
 ANALYZE user_data_embeddings;
+ANALYZE analytics_events;
+ANALYZE template_usage;
+ANALYZE registration_requests;
+ANALYZE scheduled_events;
+ANALYZE background_jobs;

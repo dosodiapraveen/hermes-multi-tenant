@@ -161,34 +161,38 @@ async def apply_project_template(
         project_row = p_r.fetchone()
         project_id = str(project_row[0])
 
-        # Add default research topics if any
+        # Add default research topics if any (batch INSERT for efficiency)
         research_topics = template[4] or []
-        for topic in research_topics[:5]:  # Limit to 5
+        if research_topics:
+            topics_to_insert = research_topics[:5]  # Limit to 5
+            # Build batch INSERT with multiple VALUES
+            values_clauses = ", ".join(
+                f"(:pid, :title_{i}, '')" for i in range(len(topics_to_insert))
+            )
+            params = {"pid": project_id}
+            for i, topic in enumerate(topics_to_insert):
+                params[f"title_{i}"] = topic
             await db.execute(
-                text("""
+                text(f"""
                     INSERT INTO project_research (project_id, title, content)
-                    VALUES (:pid, :title, '')
+                    VALUES {values_clauses}
                 """),
-                {"pid": project_id, "title": topic}
+                params
             )
 
-        # Track template usage
+        # Track template usage and increment count atomically
         await db.execute(
             text("""
-                INSERT INTO template_usage (user_id, template_type, template_id, created_item_id)
-                VALUES (:uid, 'project', :tid, :pid)
-            """),
-            {"uid": user["id"], "tid": template_id, "pid": project_id}
-        )
-
-        # Increment usage count
-        await db.execute(
-            text("""
+                WITH usage_insert AS (
+                    INSERT INTO template_usage (user_id, template_type, template_id, created_item_id)
+                    VALUES (:uid, 'project', :tid, :pid)
+                    RETURNING template_id
+                )
                 UPDATE project_templates
                 SET usage_count = usage_count + 1
-                WHERE id = :tid
+                WHERE id = (SELECT template_id FROM usage_insert)
             """),
-            {"tid": template_id}
+            {"uid": user["id"], "tid": template_id, "pid": project_id}
         )
 
         await db.commit()

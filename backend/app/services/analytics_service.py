@@ -328,6 +328,8 @@ async def update_goal_progress(user_id: str, goal_id: str, new_value: int) -> bo
 async def get_feature_adoption(user_id: str) -> Dict[str, int]:
     """Get feature adoption metrics showing usage by feature category.
 
+    Uses UNION ALL for single query execution instead of 6 subqueries.
+
     Args:
         user_id: User UUID
 
@@ -335,26 +337,39 @@ async def get_feature_adoption(user_id: str) -> Dict[str, int]:
         Dictionary mapping feature names to usage counts
     """
     async with async_session_factory() as db:
-        # Get counts from database tables (more accurate than events)
+        # Single query with UNION ALL - more efficient than 6 subqueries
         r = await db.execute(
             text("""
-                SELECT
-                    (SELECT COUNT(*) FROM notes WHERE user_id::text = :uid) as notes,
-                    (SELECT COUNT(*) FROM ideas WHERE user_id::text = :uid) as ideas,
-                    (SELECT COUNT(*) FROM projects WHERE user_id::text = :uid) as projects,
-                    (SELECT COUNT(*) FROM reminders WHERE user_id::text = :uid) as reminders,
-                    (SELECT COUNT(*) FROM scheduled_events WHERE user_id::text = :uid) as events,
-                    (SELECT COUNT(*) FROM analytics_events WHERE user_id::text = :uid AND event_category = 'search') as searches
+                SELECT 'notes' as feature, COUNT(*) as cnt
+                FROM notes WHERE user_id::text = :uid
+                UNION ALL
+                SELECT 'ideas', COUNT(*)
+                FROM ideas WHERE user_id::text = :uid
+                UNION ALL
+                SELECT 'projects', COUNT(*)
+                FROM projects WHERE user_id::text = :uid
+                UNION ALL
+                SELECT 'reminders', COUNT(*)
+                FROM reminders WHERE user_id::text = :uid
+                UNION ALL
+                SELECT 'events', COUNT(*)
+                FROM scheduled_events WHERE user_id::text = :uid
+                UNION ALL
+                SELECT 'searches', COUNT(*)
+                FROM analytics_events WHERE user_id::text = :uid AND event_category = 'search'
             """),
             {"uid": user_id}
         )
-        row = r.fetchone()
 
-        return {
-            "notes": row[0] or 0,
-            "ideas": row[1] or 0,
-            "projects": row[2] or 0,
-            "reminders": row[3] or 0,
-            "events": row[4] or 0,
-            "searches": row[5] or 0
+        result = {
+            "notes": 0,
+            "ideas": 0,
+            "projects": 0,
+            "reminders": 0,
+            "events": 0,
+            "searches": 0
         }
+        for row in r.fetchall():
+            result[row[0]] = row[1] or 0
+
+        return result
