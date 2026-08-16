@@ -5,6 +5,7 @@ from app.config import settings
 from app.database import async_session_factory
 from app.services.agent_manager import hermes_profile_chat_with_fallback
 import os
+import re
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
 from datetime import datetime, timedelta
@@ -43,10 +44,14 @@ async def typing_indicator(chat_id: str, stop_event: asyncio.Event):
             continue
 
 async def send_tg(chat_id: str, text: str):
+    if not text:
+        return
+    if len(text) > 4000:  # Telegram hard limit; truncate to avoid sendMessage 400
+        text = text[:3975] + "\n…(truncated)"
     async with httpx.AsyncClient() as c:
         await c.post(
             f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-            json={"chat_id": int(chat_id), "text": text, "parse_mode": "Markdown"},
+            json={"chat_id": int(chat_id), "text": text},  # plain text: robust to markdown/emoji
         )
 
 @router.post("/telegram")
@@ -364,6 +369,9 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         # (banner/box/summary/resume hints are suppressed). Drop the header.
         lines = [l for l in text.splitlines() if not l.strip().startswith("session_id:")]
         resp = "\n".join(lines).strip()
+        # Strip Hermes reasoning/thinking boxes (e.g. ┌─ Reasoning ─…┐ … └─ …┘).
+        # Chain-of-thought is not the answer; leaking it also risks a >4096 sendMessage 400.
+        resp = re.sub(r"┌─.*?└─[\s\u2500]*┘", "", resp, flags=re.S).strip()
         return resp or None
     except Exception:
         return None
@@ -375,6 +383,8 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
     Runs the per-user Hermes runtime (bridge-enabled), falls back to the platform
     agent_manager if Hermes is unavailable, then posts the reply to Telegram.
     """
+    typing_stop = asyncio.Event()
+    typing_task = asyncio.create_task(typing_indicator(chat_id, typing_stop))
     try:
         resp = await run_hermes_runtime(user_id, message)
         if resp is None:
@@ -398,3 +408,6 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
             await send_tg(chat_id, "⚠️ Something went wrong while I was processing your message. Please try again.")
         except Exception:
             pass
+    finally:
+        typing_stop.set()
+        typing_task.cancel()
