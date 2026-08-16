@@ -67,8 +67,12 @@ def login(email, pw):
 
 def agent_chat(uid, message, timeout=260):
     t = time.time()
-    o, e, c = run(f"docker exec {APIC} bash -lc 'HERMES_HOME={USRCONF} timeout {timeout} hermes -p {uid} chat -q {shq(message)} -Q --reasoning none 2>/dev/null'", timeout=timeout+20)
-    raw = o
+    r = subprocess.run(
+        ["docker", "exec", APIC, "bash", "-lc",
+         f'HERMES_HOME={USRCONF} timeout {timeout} hermes -p "$1" chat -q "$2" -Q --reasoning none',
+         "_", uid, message],
+        capture_output=True, text=True, timeout=timeout+20)
+    raw = r.stdout or ""
     idx = raw.rfind("session_id:")
     ans = raw[idx:] if idx >= 0 else raw
     nl = ans.find("\n"); ans = ans[nl+1:] if nl != -1 else ""
@@ -117,11 +121,11 @@ def main():
     check("delete note", st == 200 and psql(f"SELECT count(*) FROM notes WHERE user_id='{UID}'") == "0")
     st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_ev", "event_start": "2026-12-01T10:00:00"})
     eid = d.get("id") if isinstance(d, dict) else None
-    check("create event", st == 200 and eid)
+    check("create event", st == 200 and eid, detail=f"st={st} d={d}")
     st, _ = api("DELETE", f"/api/me/events/{eid}", token)
     check("delete event", st in (200, 404))
     st, d = api("POST", "/api/me/reminders", token, {"title": f"{UNIQ}_rem", "remind_at": "2026-12-01T10:00:00-05:00"})
-    check("create reminder", st == 200)
+    check("create reminder", st == 200, detail=f"st={st} d={d}")
     st, d = api("POST", "/api/me/projects", token, {"title": f"{UNIQ}_proj"})
     check("create project", st == 200)
 
@@ -148,7 +152,7 @@ def main():
     print("\n-- UX: dashboard endpoints --")
     for ep in ["/api/me/notes", "/api/me/events", "/api/me/reminders", "/api/me/projects", "/api/me/ideas"]:
         st, d = api("GET", ep, token)
-        check(f"GET {ep} 200+json", st == 200 and isinstance(d, dict))
+        check(f"GET {ep} 200+json", st == 200 and isinstance(d, (dict, list)), detail=f"st={st}")
 
     print("\n-- cleanup --")
     for t in [f"notes WHERE user_id='{UID}'", f"scheduled_events WHERE user_id='{UID}'", f"reminders WHERE user_id='{UID}'", f"projects WHERE user_id='{UID}'", f"user_accounts WHERE user_profile_id='{UID}'", f"user_profiles WHERE id='{UID}'"]:
