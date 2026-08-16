@@ -1,5 +1,5 @@
 """Webhook handlers for Telegram and WhatsApp."""
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from sqlalchemy import text
 from app.config import settings
 from app.database import async_session_factory
@@ -50,7 +50,7 @@ async def send_tg(chat_id: str, text: str):
         )
 
 @router.post("/telegram")
-async def telegram(request: Request):
+async def telegram(request: Request, background_tasks: BackgroundTasks):
     # Get client info for audit logging
     client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
                 (request.client.host if request.client else "unknown")
@@ -265,15 +265,25 @@ async def telegram(request: Request):
             return {"status": "personality"}
 
         try:
-            resp = None
             if len(u) > 3 and u[3] == "hermes":
-                resp = await run_hermes_runtime(str(u[0]), text_msg)
-            if resp is None:  # default agent runtime, or hermes unavailable -> fallback
-                resp = await hermes_profile_chat_with_fallback(
+                # Async turn: acknowledge immediately; deliver the Hermes reply in the background.
+                stop_typing.set()
+                typing_task.cancel()
+                background_tasks.add_task(_run_hermes_async, str(u[0]), chat_id, text_msg, client_ip, request_id)
+                await audit_logger.log_event(
+                    event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+                    severity=AuditLogger.Severity.INFO,
                     user_id=str(u[0]),
-                    message=text_msg,
-                    profile_dir=str(u[2]) if u[2] else None,
+                    ip_address=client_ip,
+                    message=f"[hermes async] {text_msg[:120]}",
                 )
+                return {"status": "ok", "async": True}
+
+            resp = await hermes_profile_chat_with_fallback(
+                user_id=str(u[0]),
+                message=text_msg,
+                profile_dir=str(u[2]) if u[2] else None,
+            )
             await send_tg(chat_id, resp)
 
             # Log successful message processing
@@ -317,11 +327,42 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
             herm, "-p", user_id, "chat", "-q", message,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "HERMES_HOME": "/opt/hermes"},
-            cwd="/opt/hermes",
+            env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
+            cwd="/opt/hermes/hermes",
         )
         out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         text = (out or b"").decode("utf-8", "replace").strip()
         return text or None
     except Exception:
         return None
+
+
+async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip: str, request_id: str) -> None:
+    """Background delivery for the async Hermes turn.
+
+    Runs the per-user Hermes runtime (bridge-enabled), falls back to the platform
+    agent_manager if Hermes is unavailable, then posts the reply to Telegram.
+    """
+    try:
+        resp = await run_hermes_runtime(user_id, message)
+        if resp is None:
+            resp = await hermes_profile_chat_with_fallback(
+                user_id=user_id,
+                message=message,
+                profile_dir=None,
+            )
+        if resp:
+            await send_tg(chat_id, resp)
+        await audit_logger.log_event(
+            event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+            severity=AuditLogger.Severity.INFO,
+            user_id=user_id,
+            ip_address=client_ip,
+            message=f"[hermes reply] {str(resp)[:160]}",
+        )
+    except Exception:
+        logger.exception("hermes_async_failed")
+        try:
+            await send_tg(chat_id, "⚠️ Something went wrong while I was processing your message. Please try again.")
+        except Exception:
+            pass
