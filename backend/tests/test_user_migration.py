@@ -67,8 +67,12 @@ def login(email, pw):
 
 def agent_chat(uid, message, timeout=260):
     t = time.time()
-    o, e, c = run(f"docker exec {APIC} bash -lc 'HERMES_HOME={USRCONF} timeout {timeout} hermes -p {uid} chat -q {shq(message)} -Q 2>/dev/null'", timeout=timeout+20)
-    return o.strip(), time.time() - t
+    o, e, c = run(f"docker exec {APIC} bash -lc 'HERMES_HOME={USRCONF} timeout {timeout} hermes -p {uid} chat -q {shq(message)} -Q --reasoning none 2>/dev/null'", timeout=timeout+20)
+    raw = o
+    idx = raw.rfind("session_id:")
+    ans = raw[idx:] if idx >= 0 else raw
+    nl = ans.find("\n"); ans = ans[nl+1:] if nl != -1 else ""
+    return ans.strip(), time.time() - t
 
 BAD_PATTERNS = ["Initializing agent", "Resume this session", "Duration:", "Messages:", "session_id:",
                 "Query:", "╭", "╰", "┌", "└", "┐", "┘"]
@@ -111,12 +115,12 @@ def main():
     check("update note", st == 200)
     st, _ = api("DELETE", f"/api/me/notes/{nid}", token)
     check("delete note", st == 200 and psql(f"SELECT count(*) FROM notes WHERE user_id='{UID}'") == "0")
-    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_ev", "datetime": "2026-12-01T10:00:00"})
+    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_ev", "event_start": "2026-12-01T10:00:00"})
     eid = d.get("id") if isinstance(d, dict) else None
     check("create event", st == 200 and eid)
     st, _ = api("DELETE", f"/api/me/events/{eid}", token)
     check("delete event", st in (200, 404))
-    st, d = api("POST", "/api/me/reminders", token, {"title": f"{UNIQ}_rem", "remind_at": "2026-12-01T10:00:00"})
+    st, d = api("POST", "/api/me/reminders", token, {"title": f"{UNIQ}_rem", "remind_at": "2026-12-01T10:00:00-05:00"})
     check("create reminder", st == 200)
     st, d = api("POST", "/api/me/projects", token, {"title": f"{UNIQ}_proj"})
     check("create project", st == 200)
