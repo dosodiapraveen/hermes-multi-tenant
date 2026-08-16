@@ -73,8 +73,36 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
     body = await request.json()
     chat_id = str(body.get("message", {}).get("chat", {}).get("id", ""))
     text_msg = body.get("message", {}).get("text", "")
+    chat_type = body.get("message", {}).get("chat", {}).get("type", "private")
+    sender_id = str(body.get("message", {}).get("from", {}).get("id", ""))
     if not chat_id or not text_msg:
         return {"status": "ok"}
+
+    # ── SECURITY: lock down who can trigger an agent ──
+    # Only accept private 1:1 messages. Groups/channels (a shared "beprepared channel")
+    # can be posted to by anyone, so they must NEVER route to a profile.
+    if chat_type not in ("private", "supergroup_private"):
+        logger.warning("telegram_chat_blocked", chat_type=chat_type, chat_id=chat_id)
+        await audit_logger.log_event(
+            event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+            severity=AuditLogger.Severity.WARNING,
+            ip_address=client_ip,
+            request_id=request_id,
+            details={"platform": "telegram", "reason": "non_private_chat_blocked", "chat_type": chat_type, "chat_id": chat_id},
+        )
+        return {"status": "ignored"}
+    # In a private chat the sender id equals the chat id. Reject any update where a
+    # different account is pretending to be the chat owner.
+    if sender_id and sender_id != chat_id:
+        logger.warning("telegram_sender_blocked", chat_id=chat_id, sender_id=sender_id)
+        await audit_logger.log_event(
+            event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+            severity=AuditLogger.Severity.WARNING,
+            ip_address=client_ip,
+            request_id=request_id,
+            details={"platform": "telegram", "reason": "sender_mismatch_blocked", "chat_id": chat_id, "sender_id": sender_id},
+        )
+        return {"status": "ignored"}
 
     async with async_session_factory() as db:
         r = await db.execute(
@@ -275,7 +303,7 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
                     severity=AuditLogger.Severity.INFO,
                     user_id=str(u[0]),
                     ip_address=client_ip,
-                    message=f"[hermes async] {text_msg[:120]}",
+                    details={"note": f"[hermes async] {text_msg[:120]}"},
                 )
                 return {"status": "ok", "async": True}
 
@@ -358,7 +386,7 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
             severity=AuditLogger.Severity.INFO,
             user_id=user_id,
             ip_address=client_ip,
-            message=f"[hermes reply] {str(resp)[:160]}",
+            details={"note": f"[hermes reply] {str(resp)[:160]}"},
         )
     except Exception:
         logger.exception("hermes_async_failed")
