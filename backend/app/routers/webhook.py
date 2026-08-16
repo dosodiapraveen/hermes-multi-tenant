@@ -4,6 +4,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import async_session_factory
 from app.services.agent_manager import hermes_profile_chat_with_fallback
+import os
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
 from datetime import datetime, timedelta
@@ -77,7 +78,7 @@ async def telegram(request: Request):
 
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id,is_active,profile_path FROM user_profiles WHERE phone_number=:c"),
+            text("SELECT id,is_active,profile_path,runtime FROM user_profiles WHERE phone_number=:c"),
             {"c": chat_id},
         )
         u = r.fetchone()
@@ -264,11 +265,15 @@ async def telegram(request: Request):
             return {"status": "personality"}
 
         try:
-            resp = await hermes_profile_chat_with_fallback(
-                user_id=str(u[0]),
-                message=text_msg,
-                profile_dir=str(u[2]) if u[2] else None,
-            )
+            resp = None
+            if len(u) > 3 and u[3] == "hermes":
+                resp = await run_hermes_runtime(str(u[0]), text_msg)
+            if resp is None:  # default agent runtime, or hermes unavailable -> fallback
+                resp = await hermes_profile_chat_with_fallback(
+                    user_id=str(u[0]),
+                    message=text_msg,
+                    profile_dir=str(u[2]) if u[2] else None,
+                )
             await send_tg(chat_id, resp)
 
             # Log successful message processing
@@ -295,3 +300,28 @@ async def telegram(request: Request):
         )
         await db.commit()
         return {"status": "ok"}
+
+
+async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> str | None:
+    """Invoke the container's Hermes runtime headlessly for a profile.
+
+    Returns the assistant reply, or None if Hermes is unavailable/fails so the
+    caller can gracefully fall back to the platform's agent_manager. Safe by default.
+    """
+    import asyncio, shutil
+    herm = shutil.which("hermes")
+    if not herm:
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            herm, "-p", user_id, "chat", "-q", message,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "HERMES_HOME": "/opt/hermes"},
+            cwd="/opt/hermes",
+        )
+        out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        text = (out or b"").decode("utf-8", "replace").strip()
+        return text or None
+    except Exception:
+        return None
