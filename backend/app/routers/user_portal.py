@@ -5,8 +5,10 @@ SECURITY IMPROVEMENTS:
 - CSRF protection on state-changing operations
 - Rate limiting on expensive operations
 - Uses dedicated session_token instead of verification_token
+- SSE streaming for real-time chat responses
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from app.database import async_session_factory
 from app.csrf import require_csrf
@@ -16,6 +18,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import secrets
+import asyncio
 
 router = APIRouter(prefix="/api/me", tags=["portal"])
 limiter = Limiter(key_func=get_remote_address)
@@ -695,4 +698,79 @@ async def update_personality(request: Request, body: dict, user: dict = Depends(
         await db.execute(text("UPDATE user_profiles SET personality=:p WHERE id::text=:u"), {"p": txt, "u": user["id"]})
         await db.commit()
     return {"status": "saved", "message": "Agent personality updated."}
+
+
+# ═══════════════════════════ STREAMING CHAT ═══════════════════════════
+
+@router.post("/chat")
+@limiter.limit("30/minute")
+async def chat_with_agent(request: Request, body: dict, user: dict = Depends(resolve_user)):
+    """Non-streaming chat endpoint - returns full response when complete."""
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(400, "Message required")
+    if len(message) > 8000:
+        raise HTTPException(400, "Message too long (max 8000 chars)")
+
+    from app.services.agent_manager import hermes_profile_chat_with_fallback
+
+    try:
+        response = await hermes_profile_chat_with_fallback(
+            user_id=user["id"],
+            message=message,
+        )
+        return {"response": response, "status": "complete"}
+    except Exception as e:
+        return {"response": "Sorry, I encountered an error. Please try again.", "status": "error", "error": str(e)}
+
+
+@router.get("/chat/stream")
+@limiter.limit("30/minute")
+async def chat_stream(request: Request, message: str, user: dict = Depends(resolve_user)):
+    """SSE streaming chat endpoint - provides real-time feedback.
+
+    Returns Server-Sent Events with:
+    - event: status - Processing status updates
+    - event: chunk - Response text chunks (when streaming is supported)
+    - event: complete - Final complete response
+    - event: error - Error message if something goes wrong
+    """
+    if not message or not message.strip():
+        async def error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': 'Message required'})}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+    if len(message) > 8000:
+        async def error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': 'Message too long (max 8000 chars)'})}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+    async def generate_response():
+        from app.services.agent_manager import hermes_profile_chat_with_fallback
+
+        # Send initial status
+        yield f"event: status\ndata: {json.dumps({'status': 'processing', 'message': 'Thinking...'})}\n\n"
+
+        try:
+            # Get the response (currently non-streaming, but provides status feedback)
+            response = await hermes_profile_chat_with_fallback(
+                user_id=user["id"],
+                message=message.strip(),
+            )
+
+            # Send the complete response
+            yield f"event: complete\ndata: {json.dumps({'response': response})}\n\n"
+
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 

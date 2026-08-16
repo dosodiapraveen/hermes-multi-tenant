@@ -11,6 +11,8 @@ python-jose[cryptography]==3.3.0
 python-multipart==0.0.9
 pyyaml==6.0.2
 requests==2.31.0
+aiofiles==24.1.0
+cachetools==5.5.0
 
 SpeechRecognition==3.17.0
 pydub==0.25.1

@@ -297,54 +297,44 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
             typing_task.cancel()
             return {"status": "personality"}
 
-        try:
-            if len(u) > 3 and u[3] == "hermes":
-                # Async turn: acknowledge immediately; deliver the Hermes reply in the background.
-                stop_typing.set()
-                typing_task.cancel()
-                # Kick off this turn's own typing loop + work as a detached task (not tied to the
-                # request lifecycle, so a Telegram client disconnect can't cancel it).
-                asyncio.create_task(_run_hermes_async(str(u[0]), chat_id, text_msg, client_ip, request_id))
-                await audit_logger.log_event(
-                    event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
-                    severity=AuditLogger.Severity.INFO,
-                    user_id=str(u[0]),
-                    ip_address=client_ip,
-                    details={"note": f"[hermes async] {text_msg[:120]}"},
-                )
-                return {"status": "ok", "async": True}
+        # PERFORMANCE FIX: Always use background task to avoid blocking webhook response
+        # This prevents Telegram from timing out and retrying, and gives users faster acknowledgment
+        stop_typing.set()
+        typing_task.cancel()
 
-            resp = await hermes_profile_chat_with_fallback(
-                user_id=str(u[0]),
-                message=text_msg,
-                profile_dir=str(u[2]) if u[2] else None,
-            )
-            await send_tg(chat_id, resp)
+        # Determine if this is a Hermes runtime user
+        is_hermes_runtime = len(u) > 3 and u[3] == "hermes"
+        profile_dir = str(u[2]) if u[2] else None
 
-            # Log successful message processing
-            await audit_logger.log_event(
-                event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
-                severity=AuditLogger.Severity.INFO,
-                user_id=str(u[0]),
-                ip_address=client_ip,
-                request_id=request_id,
-                details={"platform": "telegram", "message_length": len(text_msg)},
-            )
-            logger.info("telegram_message_processed", user_id=str(u[0]), message_length=len(text_msg))
-
-        except Exception as e:
-            logger.error("telegram_message_processing_failed", user_id=str(u[0]), error=str(e), exc_info=True)
-            await send_tg(chat_id, "⚠️ Something went wrong. Please try again in a moment.")
-        finally:
-            stop_typing.set()
-            typing_task.cancel()
-
-        await db.execute(
-            text("INSERT INTO activity_logs (user_id,action,details,request_id,ip_address) VALUES (:uid,'message',:det,:rid,:ip)"),
-            {"uid": str(u[0]), "det": '{"platform":"telegram","tokens":' + str(len(text_msg) // 4) + "}", "rid": request_id, "ip": client_ip},
+        background_tasks.add_task(
+            _process_message_async,
+            str(u[0]),
+            chat_id,
+            text_msg,
+            profile_dir,
+            is_hermes_runtime,
+            client_ip,
+            request_id,
         )
-        await db.commit()
-        return {"status": "ok"}
+
+        await audit_logger.log_event(
+            event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+            severity=AuditLogger.Severity.INFO,
+            user_id=str(u[0]),
+            ip_address=client_ip,
+            details={"note": f"[async] {text_msg[:120]}", "runtime": "hermes" if is_hermes_runtime else "default"},
+        )
+
+        # Log activity asynchronously too
+        background_tasks.add_task(
+            _log_activity,
+            str(u[0]),
+            text_msg,
+            request_id,
+            client_ip,
+        )
+
+        return {"status": "ok", "async": True}
 
 
 async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> str | None:
@@ -424,3 +414,62 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
     finally:
         typing_stop.set()
         typing_task.cancel()
+
+
+async def _process_message_async(
+    user_id: str,
+    chat_id: str,
+    message: str,
+    profile_dir: str | None,
+    is_hermes_runtime: bool,
+    client_ip: str,
+    request_id: str,
+) -> None:
+    """Unified background message processor for all users.
+
+    Routes to Hermes runtime or platform agent_manager based on user config,
+    with fallback handling. Sends typing indicator while processing.
+    """
+    typing_stop = asyncio.Event()
+    typing_task = asyncio.create_task(typing_indicator(chat_id, typing_stop))
+    try:
+        resp = None
+        if is_hermes_runtime:
+            # Try Hermes runtime first for hermes users
+            resp = await run_hermes_runtime(user_id, message)
+
+        # Fallback to platform agent_manager
+        if resp is None:
+            resp = await hermes_profile_chat_with_fallback(
+                user_id=user_id,
+                message=message,
+                profile_dir=profile_dir,
+            )
+
+        if resp:
+            await send_tg(chat_id, resp)
+
+        logger.info("message_processed", user_id=user_id, message_length=len(message), runtime="hermes" if is_hermes_runtime else "default")
+
+    except Exception as e:
+        logger.exception("message_processing_failed", user_id=user_id, error=str(e))
+        try:
+            await send_tg(chat_id, "⚠️ Something went wrong. Please try again in a moment.")
+        except Exception:
+            pass
+    finally:
+        typing_stop.set()
+        typing_task.cancel()
+
+
+async def _log_activity(user_id: str, message: str, request_id: str, client_ip: str) -> None:
+    """Background task to log activity without blocking webhook response."""
+    try:
+        async with async_session_factory() as db:
+            await db.execute(
+                text("INSERT INTO activity_logs (user_id,action,details,request_id,ip_address) VALUES (:uid,'message',:det,:rid,:ip)"),
+                {"uid": user_id, "det": '{"platform":"telegram","tokens":' + str(len(message) // 4) + "}", "rid": request_id, "ip": client_ip},
+            )
+            await db.commit()
+    except Exception as e:
+        logger.warning("activity_log_failed", user_id=user_id, error=str(e))
