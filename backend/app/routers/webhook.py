@@ -365,24 +365,19 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         )
         out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         text = (out or b"").decode("utf-8", "replace")
-        # -Q emits only a "session_id: <id>" header then the actual reply
-        # (banner/box/summary/resume hints are suppressed). Drop the header.
-        lines = [l for l in text.splitlines() if not l.strip().startswith("session_id:")]
-        resp = "\n".join(lines).strip()
-        # Strip Hermes reasoning/thinking boxes + border chrome (chain-of-thought isn't
-        # the answer; leaking it also risks a >4096 sendMessage 400).
-        out, skipping = [], False
-        for ln in resp.split("\n"):
-            s = ln.strip()
-            if not skipping and (s.startswith("┌") or s.startswith("╭")):
-                skipping = True
-                continue
-            if skipping:
-                if s.startswith("└") or s.startswith("╰") or (s and all(ch in "─━│┊┃·.-_ " for ch in s.replace(" ",""))):
-                    skipping = False
-                continue
-            out.append(ln)
-        resp = "\n".join(out).strip() or None
+        # -Q emits:  [optional reasoning box]  session_id:<id>  <answer>
+        # With reasoning_effort=minimal the reasoning is a short box BEFORE the
+        # session_id header, so the clean answer is everything AFTER the last
+        # session_id: line. Drop reasoning/header/banner no matter where they sit.
+        idx = text.rfind("session_id:")
+        resp_raw = text[idx:] if idx >= 0 else text
+        nl = resp_raw.find("\n")
+        resp_raw = resp_raw[nl+1:] if nl != -1 else ""
+        # Safety: drop any stray box-drawing border lines still present.
+        resp = "\n".join(
+            ln for ln in resp_raw.split("\n")
+            if not ln.strip().startswith(("┌", "└", "┐", "┘", "│", "╭", "╮", "╰", "╯", "─", "Query:", "Initializing"))
+        ).strip() or None
         return resp
     except Exception:
         return None
