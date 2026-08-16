@@ -369,10 +369,21 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         # (banner/box/summary/resume hints are suppressed). Drop the header.
         lines = [l for l in text.splitlines() if not l.strip().startswith("session_id:")]
         resp = "\n".join(lines).strip()
-        # Strip Hermes reasoning/thinking boxes (e.g. ┌─ Reasoning ─…┐ … └─ …┘).
-        # Chain-of-thought is not the answer; leaking it also risks a >4096 sendMessage 400.
-        resp = re.sub(r"┌─.*?└─[\s\u2500]*┘", "", resp, flags=re.S).strip()
-        return resp or None
+        # Strip Hermes reasoning/thinking boxes + border chrome (chain-of-thought isn't
+        # the answer; leaking it also risks a >4096 sendMessage 400).
+        out, skipping = [], False
+        for ln in resp.split("\n"):
+            s = ln.strip()
+            if not skipping and (s.startswith("┌") or s.startswith("╭")):
+                skipping = True
+                continue
+            if skipping:
+                if s.startswith("└") or s.startswith("╰") or (s and all(ch in "─━│┊┃·.-_ " for ch in s.replace(" ",""))):
+                    skipping = False
+                continue
+            out.append(ln)
+        resp = "\n".join(out).strip() or None
+        return resp
     except Exception:
         return None
 
