@@ -48,6 +48,15 @@
         </nav>
 
         <div class="header-actions">
+          <button
+            class="keyboard-hint-btn"
+            @click="showKeyboardHelp = true"
+            title="Keyboard shortcuts (?)"
+            aria-label="Show keyboard shortcuts"
+          >
+            <BaseIcon name="keyboard" :size="18" />
+            <kbd class="hint-key">?</kbd>
+          </button>
           <BaseThemeToggle />
           <BaseButton variant="outline" icon="log-out" @click="logout" class="logout-btn">
             <span class="logout-label">Logout</span>
@@ -233,6 +242,10 @@
           <div class="shortcut-item">
             <kbd>/</kbd>
             <span>Focus search</span>
+          </div>
+          <div class="shortcut-item">
+            <kbd>{{ isMac ? '⌘' : 'Ctrl' }}</kbd> <kbd>S</kbd>
+            <span>Save current modal</span>
           </div>
           <div class="shortcut-item">
             <kbd>Esc</kbd>
@@ -578,6 +591,11 @@ export default {
     document.removeEventListener('keydown', this.handleKeydown)
     window.removeEventListener('popstate', this.handlePopState)
   },
+  computed: {
+    isMac() {
+      return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+    }
+  },
   methods: {
     // URL State Sync
     readTabFromUrl() {
@@ -620,6 +638,21 @@ export default {
       // Don't trigger shortcuts when typing in inputs
       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)
       const isEditable = e.target.isContentEditable
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
+      const modKey = isMac ? e.metaKey : e.ctrlKey
+
+      // Cmd/Ctrl+S to save current modal (works in input fields)
+      if (modKey && e.key === 's') {
+        e.preventDefault()
+        if (this.showNoteModal && !this.busy) this.saveNote()
+        else if (this.showIdeaModal && !this.busy) this.saveIdea()
+        else if (this.showEventModal && !this.busy) this.saveEvent()
+        else if (this.showReminderModal && !this.busy) this.saveReminder()
+        else if (this.showProjectModal && !this.busy) this.saveProject()
+        else if (this.showResearchModal && !this.busy) this.saveResearch()
+        else if (this.showJobModal && !this.busy) this.saveJob()
+        return
+      }
 
       if (e.key === 'Escape') {
         this.pendingGoto = false
@@ -1269,6 +1302,45 @@ export default {
   margin-left: auto;
 }
 
+.keyboard-hint-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.keyboard-hint-btn:hover {
+  background: var(--color-gray-100);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.keyboard-hint-btn:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+.hint-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--spacing-1);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-family-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  background: var(--color-gray-100);
+  border-radius: var(--radius-sm);
+}
+
 .nav-tab {
   display: flex;
   align-items: center;
@@ -1332,6 +1404,10 @@ export default {
   .header-actions {
     order: 2;
     gap: var(--spacing-1);
+  }
+
+  .keyboard-hint-btn {
+    display: none;
   }
 
   .logout-btn .logout-label {

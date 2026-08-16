@@ -5,20 +5,26 @@
         <div class="onboarding-container">
           <!-- Progress Bar -->
           <div class="onboarding-progress">
-            <div
-              v-for="(step, index) in steps"
-              :key="step.key"
-              :class="['progress-step', { active: currentStep >= index, completed: currentStep > index }]"
-            >
-              <span class="step-dot">
-                <svg v-if="currentStep > index" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                <span v-else>{{ index + 1 }}</span>
-              </span>
+            <div class="progress-header">
+              <span class="progress-label">{{ steps[currentStep].title }}</span>
+              <span class="progress-counter">Step {{ currentStep + 1 }} of {{ steps.length }}</span>
             </div>
-            <div class="progress-line">
-              <div class="progress-fill" :style="{ width: `${(currentStep / (steps.length - 1)) * 100}%` }"></div>
+            <div class="progress-steps">
+              <div
+                v-for="(step, index) in steps"
+                :key="step.key"
+                :class="['progress-step', { active: currentStep >= index, completed: currentStep > index }]"
+              >
+                <span class="step-dot" :aria-label="`Step ${index + 1}: ${step.title}`">
+                  <svg v-if="currentStep > index" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <span v-else aria-hidden="true">{{ index + 1 }}</span>
+                </span>
+              </div>
+              <div class="progress-line" role="progressbar" :aria-valuenow="currentStep + 1" :aria-valuemin="1" :aria-valuemax="steps.length">
+                <div class="progress-fill" :style="{ width: `${(currentStep / (steps.length - 1)) * 100}%` }"></div>
+              </div>
             </div>
           </div>
 
@@ -295,11 +301,33 @@ export default {
 
 /* Progress Bar */
 .onboarding-progress {
+  padding: var(--spacing-4) var(--spacing-6);
+  background: var(--color-gray-50);
+}
+
+.progress-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  background: var(--color-gray-50);
+  margin-bottom: var(--spacing-3);
+}
+
+.progress-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.progress-counter {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   position: relative;
 }
 
