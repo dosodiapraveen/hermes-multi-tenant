@@ -302,7 +302,9 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
                 # Async turn: acknowledge immediately; deliver the Hermes reply in the background.
                 stop_typing.set()
                 typing_task.cancel()
-                background_tasks.add_task(_run_hermes_async, str(u[0]), chat_id, text_msg, client_ip, request_id)
+                # Kick off this turn's own typing loop + work as a detached task (not tied to the
+                # request lifecycle, so a Telegram client disconnect can't cancel it).
+                asyncio.create_task(_run_hermes_async(str(u[0]), chat_id, text_msg, client_ip, request_id))
                 await audit_logger.log_event(
                     event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
                     severity=AuditLogger.Severity.INFO,
@@ -389,6 +391,8 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
     Runs the per-user Hermes runtime (bridge-enabled), falls back to the platform
     agent_manager if Hermes is unavailable, then posts the reply to Telegram.
     """
+    # Show typing immediately (typing_indicator sends on its first iteration) so the
+    # user sees the bot working.
     typing_stop = asyncio.Event()
     typing_task = asyncio.create_task(typing_indicator(chat_id, typing_stop))
     try:
@@ -401,6 +405,9 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
             )
         if resp:
             await send_tg(chat_id, resp)
+        else:
+            # Never leave the user hanging on an empty response.
+            await send_tg(chat_id, "Hmm, I couldn't turn anything up for that — can you rephrase?")
         await audit_logger.log_event(
             event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
             severity=AuditLogger.Severity.INFO,
