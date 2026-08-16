@@ -352,15 +352,19 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         return None
     try:
         proc = await asyncio.create_subprocess_exec(
-            herm, "-p", user_id, "chat", "-q", message,
+            herm, "-p", user_id, "chat", "-q", message, "-Q",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
             cwd="/opt/hermes/hermes",
         )
         out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        text = (out or b"").decode("utf-8", "replace").strip()
-        return text or None
+        text = (out or b"").decode("utf-8", "replace")
+        # -Q emits only a "session_id: <id>" header then the actual reply
+        # (banner/box/summary/resume hints are suppressed). Drop the header.
+        lines = [l for l in text.splitlines() if not l.strip().startswith("session_id:")]
+        resp = "\n".join(lines).strip()
+        return resp or None
     except Exception:
         return None
 
