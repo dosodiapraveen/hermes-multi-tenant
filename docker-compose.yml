@@ -34,8 +34,14 @@ services:
       redis:
         condition: service_healthy
     env_file: .env
+    environment:
+      - HERMES_HOME=/opt/hermes/hermes
     volumes:
       - /opt/hermes:/opt/hermes
+      # Hermes runtime (mounted from host so 'hermes update' takes effect without image rebuild)
+      - /usr/local/lib/hermes-agent:/usr/local/lib/hermes-agent:ro
+      - /usr/local/share/uv/python:/usr/local/share/uv/python:ro
+      - /usr/local/bin/hermes:/usr/local/bin/hermes:ro
 
   frontend:
     build: ./frontend
