@@ -357,7 +357,7 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         return None
     try:
         proc = await asyncio.create_subprocess_exec(
-            herm, "-p", user_id, "chat", "-q", message, "-Q",
+            herm, "-p", user_id, "chat", "-q", message, "-Q", "--reasoning", "none",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
