@@ -16,13 +16,24 @@ from app.csrf import require_csrf
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from cachetools import TTLCache
 import json
 import secrets
 from zoneinfo import ZoneInfo
 
 APP_TZ = ZoneInfo("America/New_York")
+
+
+def _ts_local(val):
+    """Format a stored TIMESTAMPTZ as ET-local naive text ('' if empty).
+    Naive input is assumed to be UTC (as stored). Fixes the +4h dashboard
+    timezone bug across events/reminders/activity/jobs."""
+    if not val:
+        return ""
+    if val.tzinfo is None:
+        val = val.replace(tzinfo=timezone.utc)
+    return val.astimezone(APP_TZ).isoformat()[:19]
 import asyncio
 
 router = APIRouter(prefix="/api/me", tags=["portal"])
@@ -296,9 +307,9 @@ async def list_reminders(user: dict = Depends(resolve_user)):
             {
                 "id": str(row[0]),
                 "title": row[1],
-                "remind_at": row[2].isoformat()[:19] if row[2] else "",
-                "done": row[3],
-                "created_at": row[4].isoformat()[:19] if row[4] else ""
+                "remind_at": _ts_local(row[2]),
+                "done": bool(row[3]),
+                "created_at": _ts_local(row[4])
             }
             for row in r.fetchall()
         ]
@@ -368,7 +379,7 @@ async def get_activity(user: dict = Depends(resolve_user)):
         )
         activity = [
             {
-                "time": row[0].isoformat()[:19] if row[0] else "",
+                "time": _ts_local(row[0]),
                 "action": row[1],
                 "details": json.dumps(row[2]) if row[2] else "{}"
             }
@@ -582,7 +593,7 @@ def calculate_next_run(cron_expression: str) -> str:
         # Default: 1 hour from now
         next_run = now + timedelta(hours=1)
 
-    return next_run.isoformat()[:19]
+    return _ts_local(next_run)
 
 @router.get("/jobs")
 async def list_jobs(user: dict = Depends(resolve_user)):
@@ -599,8 +610,8 @@ async def list_jobs(user: dict = Depends(resolve_user)):
                 "job_type": row[3],
                 "cron_expression": row[4],
                 "is_enabled": row[5],
-                "last_run_at": row[6].isoformat()[:19] if row[6] else None,
-                "next_run_at": row[7].isoformat()[:19] if row[7] else "",
+                "last_run_at": _ts_local(row[6]) or None,
+                "next_run_at": _ts_local(row[7]),
                 "last_result": row[8] or ""
             }
             for row in r.fetchall()
