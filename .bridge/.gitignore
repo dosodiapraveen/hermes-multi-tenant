@@ -1,4 +1,6 @@
 # Ephemeral local test tooling with embedded throwaway credentials — never commit.
 mcp_test.sh
 mcp_register.sh
+mcp_in.jsonl
+latency_test.sh
 *.txt
