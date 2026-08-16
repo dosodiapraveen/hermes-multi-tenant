@@ -15,6 +15,7 @@ from slowapi.util import get_remote_address
 from pathlib import Path
 from datetime import datetime
 import json
+import secrets
 
 router = APIRouter(prefix="/api/me", tags=["portal"])
 limiter = Limiter(key_func=get_remote_address)
@@ -40,12 +41,13 @@ async def resolve_user(request: Request) -> dict:
 
     async with async_session_factory() as db:
         # SECURITY FIX: Check session_token with expiration
+        # ALSO accept a long-lived agent_token (Hermes bridge) — reversible/rotatable.
         r = await db.execute(text("""
             SELECT ua.user_profile_id, up.agent_name, up.is_active
             FROM user_accounts ua
             JOIN user_profiles up ON up.id = ua.user_profile_id
-            WHERE ua.session_token=:t
-              AND ua.session_expires > NOW()
+            WHERE (ua.session_token=:t AND ua.session_expires > NOW())
+               OR ua.agent_token=:t
               AND ua.email_verified=true
         """), {"t": token})
         u = r.fetchone()
@@ -635,6 +637,28 @@ async def delete_job(request: Request, job_id: str, user: dict = Depends(resolve
     if not row:
         raise HTTPException(404, "Job not found")
     return {"status": "deleted"}
+
+
+@router.get("/agent-token")
+async def get_agent_token(request: Request, user: dict = Depends(resolve_user)):
+    async with async_session_factory() as db:
+        r = await db.execute(text("SELECT agent_token FROM user_accounts WHERE user_profile_id::text=:u"), {"u": user["id"]})
+        row = r.fetchone()
+        if row and row[0]:
+            return {"agent_token": row[0]}
+        tok = secrets.token_urlsafe(32)
+        await db.execute(text("UPDATE user_accounts SET agent_token=:tok WHERE user_profile_id::text=:u"), {"tok": tok, "u": user["id"]})
+        await db.commit()
+        return {"agent_token": tok}
+
+
+@router.post("/agent-token/rotate")
+async def rotate_agent_token(request: Request, user: dict = Depends(resolve_user)):
+    tok = secrets.token_urlsafe(32)
+    async with async_session_factory() as db:
+        await db.execute(text("UPDATE user_accounts SET agent_token=:tok WHERE user_profile_id::text=:u"), {"tok": tok, "u": user["id"]})
+        await db.commit()
+    return {"agent_token": tok}
 
 @router.get("/personality")
 async def get_personality(user: dict = Depends(resolve_user)):
