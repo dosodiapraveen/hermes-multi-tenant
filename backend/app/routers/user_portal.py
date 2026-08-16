@@ -288,14 +288,18 @@ async def create_reminder(request: Request, body: dict, user: dict = Depends(res
         raise HTTPException(400, "Title required")
     if not remind_at:
         raise HTTPException(400, "Remind date/time required")
+    try:
+        remind_dt = datetime.fromisoformat(remind_at.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(400, "Invalid date/time format for remind_at")
     async with async_session_factory() as db:
         r = await db.execute(
             text("INSERT INTO reminders (user_id, title, remind_at, done) VALUES (:u, :t, :r, :d) RETURNING id, created_at"),
-            {"u": user["id"], "t": title, "r": remind_at, "d": done},
+            {"u": user["id"], "t": title, "r": remind_dt, "d": done},
         )
         await db.commit()
         row = r.fetchone()
-        return {"id": str(row[0]), "title": title, "remind_at": remind_at, "done": done, "created_at": str(row[1])[:19]}
+        return {"id": str(row[0]), "title": title, "remind_at": remind_dt, "done": done, "created_at": str(row[1])[:19]}
 
 @router.put("/reminders/{reminder_id}", dependencies=[Depends(require_csrf)])
 async def update_reminder(request: Request, reminder_id: str, body: dict, user: dict = Depends(resolve_user)):
@@ -306,7 +310,12 @@ async def update_reminder(request: Request, reminder_id: str, body: dict, user: 
         sets = []
         params = {"r": reminder_id}
         if "title" in body: sets.append("title=:t"); params["t"] = body["title"]
-        if "remind_at" in body: sets.append("remind_at=:ra"); params["ra"] = body["remind_at"]
+        if "remind_at" in body:
+            try:
+                params["ra"] = datetime.fromisoformat(str(body["remind_at"]).replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(400, "Invalid date/time format for remind_at")
+            sets.append("remind_at=:ra")
         if "done" in body: sets.append("done=:d"); params["d"] = body["done"]
         if not sets: raise HTTPException(400, "Nothing to update")
         sets.append("updated_at=NOW()")

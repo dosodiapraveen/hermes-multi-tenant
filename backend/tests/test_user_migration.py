@@ -119,7 +119,7 @@ def main():
     check("update note", st == 200)
     st, _ = api("DELETE", f"/api/me/notes/{nid}", token)
     check("delete note", st == 200 and psql(f"SELECT count(*) FROM notes WHERE user_id='{UID}'") == "0")
-    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_ev", "event_start": "2026-12-01T10:00:00"})
+    st, d = api("POST", "/api/me/events", token, {"title": f"{UNIQ}_ev", "event_start": "2026-12-01T10:00:00", "event_end": "2026-12-01T11:00:00"})
     eid = d.get("id") if isinstance(d, dict) else None
     check("create event", st == 200 and eid, detail=f"st={st} d={d}")
     st, _ = api("DELETE", f"/api/me/events/{eid}", token)
