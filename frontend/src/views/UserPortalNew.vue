@@ -57,7 +57,6 @@
             <BaseIcon name="keyboard" :size="18" />
             <kbd class="hint-key">?</kbd>
           </button>
-          <BaseThemeToggle />
           <BaseButton variant="outline" icon="log-out" @click="logout" class="logout-btn">
             <span class="logout-label">Logout</span>
           </BaseButton>
@@ -194,9 +193,9 @@
         :activity="activity"
       />
 
-      <!-- Personality -->
-      <PortalPersonality
-        v-if="tab === 'personality' && !loading"
+      <!-- Settings -->
+      <PortalSettings
+        v-if="tab === 'settings' && !loading"
         :personality="personality"
         :agent-name="personaAgentName"
         @save="personality = $event"
@@ -453,7 +452,7 @@
 
 <script>
 // Design System imports (shared across projects)
-import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog, BaseFab, BaseOfflineIndicator, BasePullToRefresh } from '@design-system/components/ui'
+import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseConfirmDialog, BaseFab, BaseOfflineIndicator, BasePullToRefresh } from '@design-system/components/ui'
 import { ErrorBoundary } from '@design-system/components/common'
 import { useHaptics } from '@design-system/composables'
 
@@ -467,7 +466,7 @@ import {
   PortalProjects,
   PortalJobs,
   PortalActivity,
-  PortalPersonality,
+  PortalSettings,
   OnboardingWizard
 } from '../components/portal'
 
@@ -482,7 +481,6 @@ export default {
     BaseSelect,
     BaseToast,
     BaseDateTimePicker,
-    BaseThemeToggle,
     BaseConfirmDialog,
     BaseFab,
     BaseOfflineIndicator,
@@ -496,7 +494,7 @@ export default {
     PortalProjects,
     PortalJobs,
     PortalActivity,
-    PortalPersonality,
+    PortalSettings,
     OnboardingWizard
   },
   setup() {
@@ -585,9 +583,9 @@ export default {
         { key: 'schedule', label: 'Schedule', icon: 'calendar' },
         { key: 'reminders', label: 'Reminders', icon: 'clock' },
         { key: 'projects', label: 'Projects', icon: 'folder' },
-        { key: 'jobs', label: 'Jobs', icon: 'settings' },
+        { key: 'jobs', label: 'Jobs', icon: 'briefcase' },
         { key: 'activity', label: 'Activity', icon: 'activity' },
-        { key: 'personality', label: 'Personality', icon: 'brain' }
+        { key: 'settings', label: 'Settings', icon: 'settings' }
       ],
       ideaStatusOptions: [
         { value: 'brainstorm', label: 'Brainstorm', icon: 'lightbulb' },
@@ -613,7 +611,7 @@ export default {
   },
   watch: {
     tab(v) {
-      if (v === 'personality') this.loadPersonality()
+      if (v === 'settings') this.loadPersonality()
       this.syncTabToUrl(v)
     }
   },
@@ -1533,11 +1531,14 @@ export default {
   .header-content h1 {
     flex: 1;
     min-width: 0;
+    order: 1;
+    text-align: center;
+    justify-content: center;
   }
 
   .mobile-menu-btn {
     display: flex;
-    order: 1;
+    order: 0;
   }
 
   .header-actions {

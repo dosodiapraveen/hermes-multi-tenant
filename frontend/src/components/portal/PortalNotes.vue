@@ -41,7 +41,8 @@
         action-icon="trash"
         action-label="Delete"
         action-variant="danger"
-        @action="handleSwipeDelete(note.id)"
+        :keep-open-on-threshold="true"
+        @action="confirmDelete(note)"
         @swipe-start="closeOtherSwipes(note.id)"
         :ref="el => setSwipeRef(note.id, el)"
       >
@@ -88,16 +89,27 @@
       action-label="Create Your First Note"
       @action="$emit('openModal')"
     />
+
+    <!-- Delete Confirmation Dialog -->
+    <BaseConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Delete Note"
+      :message="`Are you sure you want to delete '${deleteTarget?.title || 'this note'}'?`"
+      confirm-label="Delete"
+      variant="danger"
+      @confirm="handleConfirmedDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem } from '@design-system/components/ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem, BaseConfirmDialog } from '@design-system/components/ui'
 import { useHaptics } from '@design-system/composables'
 
 export default {
   name: 'PortalNotes',
-  components: { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem },
+  components: { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem, BaseConfirmDialog },
   props: {
     notes: { type: Array, default: () => [] },
     search: { type: String, default: '' },
@@ -114,7 +126,9 @@ export default {
       searchTerm: this.search,
       categoryFilter: this.category,
       swipeRefs: {},
-      showSwipeHint: !localStorage.getItem('notes-swipe-hint-dismissed')
+      showSwipeHint: !localStorage.getItem('notes-swipe-hint-dismissed'),
+      showDeleteConfirm: false,
+      deleteTarget: null
     }
   },
   computed: {
@@ -184,10 +198,32 @@ export default {
       // Haptic feedback when swipe starts
       this.haptics.vibrateSwipeThreshold()
     },
-    handleSwipeDelete(id) {
-      // Haptic feedback on delete
-      this.haptics.vibrateDelete()
-      this.$emit('delete', id)
+    confirmDelete(note) {
+      // Haptic feedback on tapping delete
+      this.haptics.vibrate('medium')
+      this.deleteTarget = note
+      this.showDeleteConfirm = true
+    },
+    handleConfirmedDelete() {
+      if (this.deleteTarget) {
+        // Haptic feedback on delete
+        this.haptics.vibrateDelete()
+        this.$emit('delete', this.deleteTarget.id)
+        // Close the swipeable item
+        const ref = this.swipeRefs[this.deleteTarget.id]
+        if (ref?.close) ref.close()
+      }
+      this.deleteTarget = null
+      this.showDeleteConfirm = false
+    },
+    cancelDelete() {
+      // Close the swipeable item when canceling
+      if (this.deleteTarget) {
+        const ref = this.swipeRefs[this.deleteTarget.id]
+        if (ref?.close) ref.close()
+      }
+      this.deleteTarget = null
+      this.showDeleteConfirm = false
     }
   }
 }

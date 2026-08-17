@@ -24,7 +24,8 @@
         action-icon="trash"
         action-label="Delete"
         action-variant="danger"
-        @action="handleSwipeDelete(r.id)"
+        :keep-open-on-threshold="true"
+        @action="confirmDelete(r)"
         @swipe-start="closeOtherSwipes(r.id)"
         :ref="el => setSwipeRef(r.id, el)"
       >
@@ -74,16 +75,27 @@
       action-label="Set Your First Reminder"
       @action="$emit('openModal')"
     />
+
+    <!-- Delete Confirmation Dialog -->
+    <BaseConfirmDialog
+      v-model="showDeleteConfirm"
+      title="Delete Reminder"
+      :message="`Are you sure you want to delete '${deleteTarget?.title || 'this reminder'}'?`"
+      confirm-label="Delete"
+      variant="danger"
+      @confirm="handleConfirmedDelete"
+      @cancel="cancelDelete"
+    />
   </section>
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseButton, BaseEmptyState, SwipeableItem } from '@design-system/components/ui'
+import { BaseCard, BaseIcon, BaseButton, BaseEmptyState, SwipeableItem, BaseConfirmDialog } from '@design-system/components/ui'
 import { useHaptics } from '@design-system/composables'
 
 export default {
   name: 'PortalReminders',
-  components: { BaseCard, BaseIcon, BaseButton, BaseEmptyState, SwipeableItem },
+  components: { BaseCard, BaseIcon, BaseButton, BaseEmptyState, SwipeableItem, BaseConfirmDialog },
   props: {
     reminders: { type: Array, default: () => [] }
   },
@@ -95,7 +107,9 @@ export default {
   data() {
     return {
       swipeRefs: {},
-      showSwipeHint: !localStorage.getItem('reminders-swipe-hint-dismissed')
+      showSwipeHint: !localStorage.getItem('reminders-swipe-hint-dismissed'),
+      showDeleteConfirm: false,
+      deleteTarget: null
     }
   },
   methods: {
@@ -126,10 +140,32 @@ export default {
       // Haptic feedback when swipe starts
       this.haptics.vibrateSwipeThreshold()
     },
-    handleSwipeDelete(id) {
-      // Haptic feedback on delete
-      this.haptics.vibrateDelete()
-      this.$emit('delete', id)
+    confirmDelete(reminder) {
+      // Haptic feedback on tapping delete
+      this.haptics.vibrate('medium')
+      this.deleteTarget = reminder
+      this.showDeleteConfirm = true
+    },
+    handleConfirmedDelete() {
+      if (this.deleteTarget) {
+        // Haptic feedback on delete
+        this.haptics.vibrateDelete()
+        this.$emit('delete', this.deleteTarget.id)
+        // Close the swipeable item
+        const ref = this.swipeRefs[this.deleteTarget.id]
+        if (ref?.close) ref.close()
+      }
+      this.deleteTarget = null
+      this.showDeleteConfirm = false
+    },
+    cancelDelete() {
+      // Close the swipeable item when canceling
+      if (this.deleteTarget) {
+        const ref = this.swipeRefs[this.deleteTarget.id]
+        if (ref?.close) ref.close()
+      }
+      this.deleteTarget = null
+      this.showDeleteConfirm = false
     }
   }
 }
