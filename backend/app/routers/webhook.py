@@ -9,7 +9,8 @@ import re
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
 import sys, subprocess
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from app.logging_config import get_logger
 from app.services.audit_logger import audit_logger, AuditLogger
@@ -576,6 +577,101 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> 
         return None
 
 
+_FAST_IDENT = {
+    "events": re.compile(r"\b(schedule|calendar|events?|appointments?|upcoming)\b", re.I),
+    "reminders": re.compile(r"\b(remind(er|ers)?|to[- ]do|todos?)\b", re.I),
+    "notes": re.compile(r"\bnotes?\b", re.I),
+    "projects": re.compile(r"\bprojects?\b", re.I),
+}
+_FAST_WRITE = re.compile(
+    r"\b(create|add|new|set|delete|remove|update|edit|make|write|"
+    r"book|cancel|rename|reschedule|postpone|schedule a|remind me to|remind me of)\b", re.I)
+
+
+def _detect_fast_kind(low: str):
+    for k, pat in _FAST_IDENT.items():
+        if pat.search(low):
+            return k
+    return None
+
+
+def _fmt_dt(dt):
+    if dt is None:
+        return "sometime"
+    try:
+        return dt.astimezone(ZoneInfo("America/New_York")).strftime("%a %b %d  %I:%M %p")
+    except Exception:
+        return str(dt)[:16]
+
+
+async def _fast_query(kind: str, user_id: str):
+    async with async_session_factory() as db:
+        if kind == "events":
+            r = await db.execute(text(
+                "SELECT title, event_start FROM scheduled_events WHERE user_id::text=:u AND event_start >= NOW() ORDER BY event_start LIMIT 8"),
+                {"u": user_id})
+            return [f"• {t} — {_fmt_dt(s)}" for t, s in r.fetchall()]
+        if kind == "reminders":
+            r = await db.execute(text(
+                "SELECT title, remind_at FROM reminders WHERE user_id::text=:u AND done=false ORDER BY remind_at LIMIT 8"),
+                {"u": user_id})
+            return [f"• {t} — {_fmt_dt(s)}" for t, s in r.fetchall()]
+        if kind == "notes":
+            r = await db.execute(text(
+                "SELECT title, content FROM notes WHERE user_id::text=:u ORDER BY updated_at DESC LIMIT 6"),
+                {"u": user_id})
+            out = []
+            for t, c in r.fetchall():
+                c = (c or "").strip().replace("\n", " ")[:80]
+                out.append(f"• {t}" + (f": {c}…" if c else ""))
+            return out
+        if kind == "projects":
+            r = await db.execute(text(
+                "SELECT title FROM projects WHERE user_id::text=:u ORDER BY updated_at DESC LIMIT 8"),
+                {"u": user_id})
+            return [f"• {t}" for (t,) in r.fetchall()]
+    return []
+
+
+async def _fast_count(kind: str, user_id: str) -> int:
+    tbl = {"events": "scheduled_events", "reminders": "reminders",
+           "notes": "notes", "projects": "projects"}[kind]
+    async with async_session_factory() as db:
+        r = await db.execute(text(f"SELECT COUNT(*) FROM {tbl} WHERE user_id::text=:u"), {"u": user_id})
+        return r.scalar() or 0
+
+
+async def try_fast_path(user_id: str, message: str):
+    """Answer direct DB-lookup questions instantly (no agent loop, no model calls).
+    Returns a reply string, or None to fall through to the Hermes agent."""
+    m = (message or "").strip()
+    low = m.lower()
+    if not m or len(m) > 200:
+        return None
+    if _FAST_WRITE.search(low):
+        return None                                     # actions/writes -> agent
+    if re.search(r"\b(how many)\b|\bcount of\b", low):
+        k = _detect_fast_kind(low)
+        if k:
+            return f"You have {await _fast_count(k, user_id)} {k}."
+        return None
+    k = _detect_fast_kind(low)
+    if not k:
+        return None
+    if not (re.search(r"\b(what|list|show|tell|see|my|any|current|upcoming|all|how)\b", low)
+            or k in ("notes", "projects")):
+        return None
+    items = await _fast_query(k, user_id)
+    head = {"events": "upcoming events", "reminders": "active reminders",
+            "notes": "notes", "projects": "projects"}[k]
+    if not items:
+        return f"You have no {head} right now."
+    reply = f"Here are your {head}:\n" + "\n".join(items)
+    if len(items) == 8:
+        reply += f"\n…showing the {len(items)} most recent."
+    return reply
+
+
 async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip: str, request_id: str) -> None:
     """Background delivery for the async Hermes turn.
 
@@ -587,6 +683,20 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
     typing_stop = asyncio.Event()
     typing_task = asyncio.create_task(typing_indicator(chat_id, typing_stop))
     try:
+        # Fast-path: answer direct DB-lookup questions instantly (no agent/model).
+        quick = await try_fast_path(user_id, message)
+        if quick:
+            typing_stop.set()
+            typing_task.cancel()
+            await send_tg(chat_id, quick)
+            await audit_logger.log_event(
+                event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+                severity=AuditLogger.Severity.INFO,
+                user_id=user_id,
+                ip_address=client_ip,
+                details={"note": f"[fast-path] {quick[:140]}"},
+            )
+            return
         resp = await run_hermes_runtime(user_id, message)
         if resp is None:
             resp = await hermes_profile_chat_with_fallback(
