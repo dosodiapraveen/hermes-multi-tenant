@@ -27,40 +27,55 @@
       />
     </div>
 
+    <!-- Swipe hint (shown once) -->
+    <p v-if="filteredNotes.length && showSwipeHint" class="swipe-hint">
+      <BaseIcon name="arrow-left" :size="14" />
+      Swipe left to delete
+    </p>
+
     <!-- Notes List -->
     <div v-if="filteredNotes.length" class="notes-list">
-      <BaseCard
+      <SwipeableItem
         v-for="note in filteredNotes"
         :key="note.id"
-        clickable
-        :class="{ expanded: expandedId === note.id }"
-        @click="toggleExpand(note.id)"
+        action-icon="trash"
+        action-label="Delete"
+        action-variant="danger"
+        @action="handleSwipeDelete(note.id)"
+        @swipe-start="closeOtherSwipes(note.id)"
+        :ref="el => setSwipeRef(note.id, el)"
       >
-        <div class="note-header">
-          <BaseBadge :label="note.category" variant="primary" size="sm" />
-          <span class="note-title">{{ note.title }}</span>
-          <span class="note-date">{{ formatDate(note.updated_at) }}</span>
-        </div>
-
-        <!-- Content Preview (when collapsed) -->
-        <p v-if="expandedId !== note.id && note.content" class="note-preview">
-          {{ truncateContent(note.content) }}
-        </p>
-
-        <Transition name="expand">
-          <div v-if="expandedId === note.id" class="note-body">
-            <p>{{ note.content }}</p>
-            <div class="note-actions">
-              <BaseButton variant="outline" size="sm" icon="edit" @click.stop="$emit('openModal', note)">
-                Edit
-              </BaseButton>
-              <BaseButton variant="danger" size="sm" icon="trash" @click.stop="$emit('delete', note.id)">
-                Delete
-              </BaseButton>
-            </div>
+        <BaseCard
+          clickable
+          :class="{ expanded: expandedId === note.id }"
+          @click="toggleExpand(note.id)"
+        >
+          <div class="note-header">
+            <BaseBadge :label="note.category" variant="primary" size="sm" />
+            <span class="note-title">{{ note.title }}</span>
+            <span class="note-date">{{ formatDate(note.updated_at) }}</span>
           </div>
-        </Transition>
-      </BaseCard>
+
+          <!-- Content Preview (when collapsed) -->
+          <p v-if="expandedId !== note.id && note.content" class="note-preview">
+            {{ truncateContent(note.content) }}
+          </p>
+
+          <Transition name="expand">
+            <div v-if="expandedId === note.id" class="note-body">
+              <p>{{ note.content }}</p>
+              <div class="note-actions">
+                <BaseButton variant="outline" size="sm" icon="edit" @click.stop="$emit('openModal', note)">
+                  Edit
+                </BaseButton>
+                <BaseButton variant="danger" size="sm" icon="trash" @click.stop="$emit('delete', note.id)">
+                  Delete
+                </BaseButton>
+              </div>
+            </div>
+          </Transition>
+        </BaseCard>
+      </SwipeableItem>
     </div>
 
     <!-- Empty State -->
@@ -77,11 +92,11 @@
 </template>
 
 <script>
-import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState } from '@design-system/components/ui'
+import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem } from '@design-system/components/ui'
 
 export default {
   name: 'PortalNotes',
-  components: { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState },
+  components: { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem },
   props: {
     notes: { type: Array, default: () => [] },
     search: { type: String, default: '' },
@@ -92,7 +107,9 @@ export default {
     return {
       expandedId: null,
       searchTerm: this.search,
-      categoryFilter: this.category
+      categoryFilter: this.category,
+      swipeRefs: {},
+      showSwipeHint: !localStorage.getItem('notes-swipe-hint-dismissed')
     }
   },
   computed: {
@@ -140,6 +157,28 @@ export default {
       const cleaned = content.replace(/\n+/g, ' ').trim()
       if (cleaned.length <= maxLength) return cleaned
       return cleaned.slice(0, maxLength).trim() + '...'
+    },
+    setSwipeRef(id, el) {
+      if (el) {
+        this.swipeRefs[id] = el
+      } else {
+        delete this.swipeRefs[id]
+      }
+    },
+    closeOtherSwipes(activeId) {
+      Object.entries(this.swipeRefs).forEach(([id, ref]) => {
+        if (id !== String(activeId) && ref?.close) {
+          ref.close()
+        }
+      })
+      // Dismiss hint on first swipe
+      if (this.showSwipeHint) {
+        this.showSwipeHint = false
+        localStorage.setItem('notes-swipe-hint-dismissed', 'true')
+      }
+    },
+    handleSwipeDelete(id) {
+      this.$emit('delete', id)
     }
   }
 }
@@ -256,6 +295,25 @@ export default {
   max-height: 500px;
 }
 
+/* Swipe hint */
+.swipe-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  margin: 0;
+  padding: var(--spacing-2) var(--spacing-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  animation: hint-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hint-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .section-header {
@@ -269,6 +327,13 @@ export default {
 
   .filter-bar > :last-child {
     min-width: 100%;
+  }
+}
+
+/* Hide swipe hint on devices without touch */
+@media (hover: hover) and (pointer: fine) {
+  .swipe-hint {
+    display: none;
   }
 }
 </style>
