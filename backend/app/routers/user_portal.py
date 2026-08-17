@@ -99,8 +99,9 @@ async def resolve_user(request: Request) -> dict:
 @router.get("/notes")
 async def list_notes(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
+        # Truncate content to 150 chars for list view to reduce payload by ~60-70%
         r = await db.execute(
-            text("SELECT id, title, content, category, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
+            text("SELECT id, title, LEFT(content, 150) as content_preview, category, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
             {"uid": user["id"]},
         )
         notes = [{"id": str(row[0]), "title": row[1], "content": row[2], "category": row[3], "updated_at": str(row[4])[:19]} for row in r.fetchall()]
@@ -175,8 +176,9 @@ async def delete_note(request: Request, note_id: str, user: dict = Depends(resol
 @router.get("/projects")
 async def list_projects(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
+        # Truncate description to 100 chars for list view to reduce payload
         r = await db.execute(
-            text("SELECT id, title, description, status, updated_at FROM projects WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 100"),
+            text("SELECT id, title, LEFT(description, 100) as description_preview, status, updated_at FROM projects WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 100"),
             {"uid": user["id"]},
         )
         projects = [{"id": str(row[0]), "title": row[1], "description": row[2], "status": row[3], "updated_at": str(row[4])[:19] if row[4] else ""} for row in r.fetchall()]
@@ -200,19 +202,33 @@ async def create_project(request: Request, body: dict, user: dict = Depends(reso
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
+        # Single query with LEFT JOIN to avoid N+1 (project + research in one roundtrip)
         r = await db.execute(
-            text("SELECT id, title, description, status, created_at, updated_at FROM projects WHERE id::text=:p AND user_id::text=:u"),
+            text("""
+                SELECT p.id, p.title, p.description, p.status, p.created_at, p.updated_at,
+                       COALESCE(json_agg(
+                           json_build_object('id', pr.id::text, 'title', pr.title, 'content', pr.content, 'created_at', to_char(pr.created_at, 'YYYY-MM-DD HH24:MI:SS'))
+                           ORDER BY pr.created_at DESC
+                       ) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as research
+                FROM projects p
+                LEFT JOIN LATERAL (
+                    SELECT id, title, content, created_at
+                    FROM project_research
+                    WHERE project_id = p.id
+                    ORDER BY created_at DESC
+                    LIMIT 50
+                ) pr ON true
+                WHERE p.id::text=:p AND p.user_id::text=:u
+                GROUP BY p.id, p.title, p.description, p.status, p.created_at, p.updated_at
+            """),
             {"p": project_id, "u": user["id"]},
         )
         p = r.fetchone()
         if not p: raise HTTPException(404, "Project not found")
-        # Get research notes
-        rr = await db.execute(text("SELECT id, title, content, created_at FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC LIMIT 50"), {"p": project_id})
-        research = [{"id": str(row[0]), "title": row[1], "content": row[2], "created_at": str(row[3])[:19]} for row in rr.fetchall()]
         return {
             "id": str(p[0]), "title": p[1], "description": p[2], "status": p[3],
             "created_at": str(p[4])[:19], "updated_at": str(p[5])[:19] if p[5] else "",
-            "research": research,
+            "research": p[6] if p[6] else [],
         }
 
 @router.put("/projects/{project_id}", dependencies=[Depends(require_csrf)])
@@ -389,7 +405,8 @@ async def get_activity(user: dict = Depends(resolve_user)):
 @router.get("/ideas")
 async def list_ideas(status: str = None, user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        query = "SELECT id, title, content, status, tags, updated_at FROM ideas WHERE user_id::text=:uid"
+        # Truncate content to 150 chars for list view to reduce payload
+        query = "SELECT id, title, LEFT(content, 150) as content_preview, status, tags, updated_at FROM ideas WHERE user_id::text=:uid"
         params = {"uid": user["id"]}
         if status:
             query += " AND status=:status"

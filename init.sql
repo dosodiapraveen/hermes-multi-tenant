@@ -178,6 +178,16 @@ CREATE TABLE IF NOT EXISTS background_jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_user ON background_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_enabled ON background_jobs(is_enabled, next_run_at);
 
+-- Performance indexes for user-scoped queries (critical for portal endpoints)
+CREATE INDEX IF NOT EXISTS idx_notes_user_updated ON notes(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reminders_user_remind ON reminders(user_id, remind_at ASC);
+CREATE INDEX IF NOT EXISTS idx_reminders_user_done ON reminders(user_id, done, remind_at) WHERE done = false;
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user_created ON activity_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_project_research_project ON project_research(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_created ON background_jobs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ideas_user_updated ON ideas(user_id, updated_at DESC);
+
 -- Schema migration tracking
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version TEXT PRIMARY KEY,

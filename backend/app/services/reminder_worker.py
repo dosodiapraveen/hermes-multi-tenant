@@ -38,6 +38,7 @@ async def fire_due_reminders() -> int:
         rows = r.fetchall()
 
         sent = 0
+        sent_ids = []  # Collect IDs for batch update
         async with httpx.AsyncClient(timeout=10) as client:
             for row in rows:
                 rid, title, chat_id, platform, agent_name = row
@@ -56,13 +57,18 @@ async def fire_due_reminders() -> int:
                     )
                     if resp.status_code == 200:
                         sent += 1
-                        # Mark done once sent
-                        await db.execute(text("UPDATE reminders SET done=true WHERE id=:id"), {"id": rid})
+                        sent_ids.append(str(rid))
                     else:
                         print(f"REMINDER_WORKER: send failed {resp.status_code} for reminder {rid}", flush=True)
                 except Exception as e:
                     print(f"REMINDER_WORKER: error sending reminder {rid}: {e}", flush=True)
 
+        # Batch update: mark all successfully sent reminders as done in one query
+        if sent_ids:
+            await db.execute(
+                text("UPDATE reminders SET done=true, updated_at=NOW() WHERE id = ANY(:ids::uuid[])"),
+                {"ids": sent_ids}
+            )
         await db.commit()
         return sent
 
