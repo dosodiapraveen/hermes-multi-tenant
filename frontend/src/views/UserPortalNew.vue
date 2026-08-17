@@ -207,6 +207,22 @@
     <!-- Toast Notifications -->
     <BaseToast ref="toast" position="bottom-right" />
 
+    <!-- Offline Indicator -->
+    <BaseOfflineIndicator
+      position="top"
+      @offline="handleOffline"
+      @online="handleOnline"
+    />
+
+    <!-- Floating Action Button (mobile) -->
+    <BaseFab
+      v-if="!loading"
+      :icon="fabIcon"
+      :items="fabItems"
+      position="bottom-right"
+      class="mobile-fab"
+    />
+
     <!-- Keyboard Shortcuts Help Modal -->
     <BaseModal v-model="showKeyboardHelp" title="Keyboard Shortcuts" size="sm">
       <div class="shortcuts-list">
@@ -437,8 +453,9 @@
 
 <script>
 // Design System imports (shared across projects)
-import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog } from '@design-system/components/ui'
+import { BaseIcon, BaseButton, BaseBadge, BaseModal, BaseInput, BaseSelect, BaseToast, BaseDateTimePicker, BaseThemeToggle, BaseConfirmDialog, BaseFab, BaseOfflineIndicator, BasePullToRefresh } from '@design-system/components/ui'
 import { ErrorBoundary } from '@design-system/components/common'
+import { useHaptics } from '@design-system/composables'
 
 // Project-specific components
 import {
@@ -467,6 +484,9 @@ export default {
     BaseDateTimePicker,
     BaseThemeToggle,
     BaseConfirmDialog,
+    BaseFab,
+    BaseOfflineIndicator,
+    BasePullToRefresh,
     ErrorBoundary,
     PortalDashboard,
     PortalNotes,
@@ -478,6 +498,10 @@ export default {
     PortalActivity,
     PortalPersonality,
     OnboardingWizard
+  },
+  setup() {
+    const haptics = useHaptics()
+    return { haptics }
   },
   data() {
     return {
@@ -618,6 +642,24 @@ export default {
              this.isFormDirty('project') ||
              this.isFormDirty('research') ||
              this.isFormDirty('job')
+    },
+    // FAB icon based on current tab
+    fabIcon() {
+      return 'plus'
+    },
+    // FAB speed dial items based on current tab
+    fabItems() {
+      const items = [
+        { id: 'note', icon: 'file-text', label: 'New Note', action: () => this.openNoteModal() },
+        { id: 'idea', icon: 'lightbulb', label: 'New Idea', action: () => this.openIdeaModal() },
+        { id: 'reminder', icon: 'clock', label: 'New Reminder', action: () => this.openReminderModal() },
+        { id: 'event', icon: 'calendar', label: 'New Event', action: () => this.openEventModal() }
+      ]
+      // Add project if on projects tab
+      if (this.tab === 'projects') {
+        items.push({ id: 'project', icon: 'folder', label: 'New Project', action: () => this.openProjectModal() })
+      }
+      return items
     }
   },
   methods: {
@@ -650,6 +692,16 @@ export default {
 
     showToast(message, type = 'success') {
       this.$refs.toast?.[type]?.(message) || this.$refs.toast?.add?.({ message, type })
+    },
+
+    // Offline/Online handlers
+    handleOffline() {
+      this.haptics.vibrateWarning()
+    },
+    handleOnline() {
+      this.haptics.vibrateSuccess()
+      // Refresh data when back online
+      this.fetchData()
     },
 
     // Unsaved changes handling
@@ -1792,6 +1844,29 @@ export default {
 
   .portal-main {
     padding-bottom: 84px;
+  }
+
+  /* Adjust header actions position to avoid FAB overlap */
+  .header-actions {
+    bottom: 80px; /* Above FAB */
+  }
+}
+
+/* Mobile FAB - only show on touch devices */
+.mobile-fab {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-fab {
+    display: flex;
+  }
+}
+
+/* Hide FAB on devices with hover (desktop with mouse) */
+@media (hover: hover) and (pointer: fine) {
+  .mobile-fab {
+    display: none;
   }
 }
 </style>

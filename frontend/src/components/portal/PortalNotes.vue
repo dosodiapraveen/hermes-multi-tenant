@@ -93,6 +93,7 @@
 
 <script>
 import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseInput, BaseSelect, BaseEmptyState, SwipeableItem } from '@design-system/components/ui'
+import { useHaptics } from '@design-system/composables'
 
 export default {
   name: 'PortalNotes',
@@ -103,6 +104,10 @@ export default {
     category: { type: String, default: '' }
   },
   emits: ['openModal', 'delete', 'update:search', 'update:category'],
+  setup() {
+    const haptics = useHaptics()
+    return { haptics }
+  },
   data() {
     return {
       expandedId: null,
@@ -176,8 +181,12 @@ export default {
         this.showSwipeHint = false
         localStorage.setItem('notes-swipe-hint-dismissed', 'true')
       }
+      // Haptic feedback when swipe starts
+      this.haptics.vibrateSwipeThreshold()
     },
     handleSwipeDelete(id) {
+      // Haptic feedback on delete
+      this.haptics.vibrateDelete()
       this.$emit('delete', id)
     }
   }

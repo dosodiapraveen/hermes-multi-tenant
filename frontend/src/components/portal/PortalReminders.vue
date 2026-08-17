@@ -79,6 +79,7 @@
 
 <script>
 import { BaseCard, BaseIcon, BaseButton, BaseEmptyState, SwipeableItem } from '@design-system/components/ui'
+import { useHaptics } from '@design-system/composables'
 
 export default {
   name: 'PortalReminders',
@@ -87,6 +88,10 @@ export default {
     reminders: { type: Array, default: () => [] }
   },
   emits: ['openModal', 'delete', 'toggle'],
+  setup() {
+    const haptics = useHaptics()
+    return { haptics }
+  },
   data() {
     return {
       swipeRefs: {},
@@ -118,8 +123,12 @@ export default {
         this.showSwipeHint = false
         localStorage.setItem('reminders-swipe-hint-dismissed', 'true')
       }
+      // Haptic feedback when swipe starts
+      this.haptics.vibrateSwipeThreshold()
     },
     handleSwipeDelete(id) {
+      // Haptic feedback on delete
+      this.haptics.vibrateDelete()
       this.$emit('delete', id)
     }
   }
