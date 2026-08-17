@@ -13,9 +13,49 @@ import os
 import sys
 import urllib.request
 import urllib.error
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 BASE = os.environ.get("BEPREPARED_BASE", "https://beprepared.dev/api/me").rstrip("/")
 TOKEN = os.environ.get("BEPREPARED_TOKEN", "")
+TZ = ZoneInfo(os.environ.get("BEPREPARED_TZ", "America/New_York"))
+
+
+def _to_local(iso):
+    """UTC/offset ISO -> user-local 'YYYY-MM-DD HH:MM' for the agent to read."""
+    if not iso:
+        return iso
+    try:
+        d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        return d.astimezone(TZ).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return iso
+
+
+def _from_local(iso):
+    """Agent's naive local input -> offset-aware ISO so the API stores the right UTC instant."""
+    if not iso:
+        return iso
+    try:
+        d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return iso
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=TZ)
+    return d.isoformat()
+
+
+def _localize(body, fields):
+    """Rewrite offset-aware API times in a response body to user-local times."""
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return body
+    for item in data.get("events", data.get("reminders", [])):
+        for f in fields:
+            if f in item:
+                item[f] = _to_local(item[f])
+    return json.dumps(data)
 
 
 def call(method, path, payload=None):
@@ -63,12 +103,26 @@ def dispatch(name, args):
     if name == "projects_create":
         return call("POST", "/projects", {k: a.get(k) for k in ("title", "description") if k in a})
     if name == "reminders_list":
-        return call("GET", "/reminders")
+        r = call("GET", "/reminders")
+        if "body" in r:
+            r["body"] = _localize(r["body"], ("remind_at", "created_at"))
+        return r
     if name == "reminders_create":
+        a = dict(a)
+        if a.get("remind_at"):
+            a["remind_at"] = _from_local(a["remind_at"])
         return call("POST", "/reminders", {k: a.get(k) for k in ("title", "remind_at", "description") if k in a})
     if name == "events_list":
-        return call("GET", "/events")
+        r = call("GET", "/events")
+        if "body" in r:
+            r["body"] = _localize(r["body"], ("event_start", "event_end"))
+        return r
     if name == "events_create":
+        a = dict(a)
+        if a.get("event_start"):
+            a["event_start"] = _from_local(a["event_start"])
+        if a.get("event_end"):
+            a["event_end"] = _from_local(a["event_end"])
         return call("POST", "/events", {k: a.get(k) for k in ("title", "event_start", "event_end") if k in a})
     return {"error": "unknown tool: %s" % name}
 
