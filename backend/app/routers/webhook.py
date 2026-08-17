@@ -108,21 +108,28 @@ def build_pptx(deck: dict) -> str:
 
 def try_build_deck(arg: str):
     """If arg looks like a deck-JSON (has a 'slides' list), build a .pptx and return its path.
-    Tolerates the diff-wrapped form the agent's file tool emits (a/…→b/…, @@, + prefixes)."""
+    Robustly extracts the JSON object from diff/noise-wrapped agent output."""
+
+    if not arg:
+        return None
     data = None
     try:
         data = json.loads(arg)
     except Exception:
+        pass
+    if not isinstance(data, dict):
         clean = "\n".join(
-            l[1:] if l.startswith("+") else l
+            (l[1:] if l.startswith("+") else l)
             for l in arg.splitlines()
-            if l.strip() and not l.startswith(("@@", "a/", "b/", "---", "diff ", "index ", "new file"))
+            if l.strip() and not l.startswith(("@", "a/", "b/", "diff ", "index ", "\\"))
         )
-        try:
-            data = json.loads(clean)
-        except Exception:
-            return None
-    if isinstance(data, dict) and isinstance(data.get("slides"), list) and "title" in data:
+        i, j = clean.find("{"), clean.rfind("}")
+        if i != -1 and j > i:
+            try:
+                data = json.loads(clean[i:j + 1])
+            except Exception:
+                data = None
+    if isinstance(data, dict) and isinstance(data.get("slides"), list):
         try:
             return build_pptx(data)
         except Exception:
