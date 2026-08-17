@@ -87,7 +87,7 @@ TOOLS = [
     {"name": "reminders_list", "description": "List the user's reminders.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "reminders_create", "description": "Create a reminder.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "remind_at": {"type": "string"}, "description": {"type": "string"}}, "required": ["title", "remind_at"]}},
     {"name": "events_list", "description": "List the user's events.", "inputSchema": {"type": "object", "properties": {}}},
-    {"name": "events_create", "description": "Create an event.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "event_start": {"type": "string"}, "event_end": {"type": "string"}}, "required": ["title", "event_start"]}},
+    {"name": "events_create", "description": "Create an event.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "event_start": {"type": "string"}, "event_end": {"type": "string"}, "location": {"type": "string"}}, "required": ["title", "event_start"]}},
 ]
 
 
@@ -126,7 +126,7 @@ def dispatch(name, args):
             a["event_start"] = _from_local(a["event_start"])
         if a.get("event_end"):
             a["event_end"] = _from_local(a["event_end"])
-        return call("POST", "/events", {k: a.get(k) for k in ("title", "event_start", "event_end") if k in a})
+        return call("POST", "/events", {k: a.get(k) for k in ("title", "description", "event_start", "event_end", "location") if k in a})
     return {"error": "unknown tool: %s" % name}
 
 

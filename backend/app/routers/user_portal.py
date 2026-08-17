@@ -313,7 +313,7 @@ async def reindex_data(request: Request, user: dict = Depends(resolve_user)):
 async def list_reminders(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, remind_at, done, created_at FROM reminders WHERE user_id::text=:uid ORDER BY remind_at ASC LIMIT 100"),
+            text("SELECT id, title, remind_at, done, description, created_at FROM reminders WHERE user_id::text=:uid ORDER BY remind_at ASC LIMIT 100"),
             {"uid": user["id"]},
         )
         reminders = [
@@ -322,7 +322,8 @@ async def list_reminders(user: dict = Depends(resolve_user)):
                 "title": row[1],
                 "remind_at": _ts_local(row[2]),
                 "done": bool(row[3]),
-                "created_at": _ts_local(row[4])
+                "description": row[4] or "",
+                "created_at": _ts_local(row[5])
             }
             for row in r.fetchall()
         ]
@@ -332,6 +333,7 @@ async def list_reminders(user: dict = Depends(resolve_user)):
 async def create_reminder(request: Request, body: dict, user: dict = Depends(resolve_user)):
     title = (body.get("title") or "").strip()
     remind_at = (body.get("remind_at") or "").strip()
+    description = (body.get("description") or "").strip()
     done = body.get("done", False)
     if not title:
         raise HTTPException(400, "Title required")
@@ -343,12 +345,12 @@ async def create_reminder(request: Request, body: dict, user: dict = Depends(res
         raise HTTPException(400, "Invalid date/time format for remind_at")
     async with async_session_factory() as db:
         r = await db.execute(
-            text("INSERT INTO reminders (user_id, title, remind_at, done) VALUES (:u, :t, :r, :d) RETURNING id, created_at"),
-            {"u": user["id"], "t": title, "r": remind_dt, "d": done},
+            text("INSERT INTO reminders (user_id, title, remind_at, done, description) VALUES (:u, :t, :r, :d, :desc) RETURNING id, created_at"),
+            {"u": user["id"], "t": title, "r": remind_dt, "d": done, "desc": description},
         )
         await db.commit()
         row = r.fetchone()
-        return {"id": str(row[0]), "title": title, "remind_at": remind_dt, "done": done, "created_at": str(row[1])[:19]}
+        return {"id": str(row[0]), "title": title, "remind_at": remind_dt, "done": done, "description": description, "created_at": str(row[1])[:19]}
 
 @router.put("/reminders/{reminder_id}", dependencies=[Depends(require_csrf)])
 async def update_reminder(request: Request, reminder_id: str, body: dict, user: dict = Depends(resolve_user)):
@@ -366,6 +368,7 @@ async def update_reminder(request: Request, reminder_id: str, body: dict, user: 
                 raise HTTPException(400, "Invalid date/time format for remind_at")
             sets.append("remind_at=:ra")
         if "done" in body: sets.append("done=:d"); params["d"] = body["done"]
+        if "description" in body: sets.append("description=:desc"); params["desc"] = body["description"]
         if not sets: raise HTTPException(400, "Nothing to update")
         sets.append("updated_at=NOW()")
         await db.execute(text(f"UPDATE reminders SET {', '.join(sets)} WHERE id::text=:r"), params)
@@ -516,13 +519,11 @@ async def create_event(request: Request, body: dict, user: dict = Depends(resolv
         raise HTTPException(400, "Title required")
     if not event_start:
         raise HTTPException(400, "Event start time required")
-    if not event_end:
-        raise HTTPException(400, "Event end time required")
 
     # Parse ISO strings into datetimes (columns are TIMESTAMPTZ)
     try:
         start_dt = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(event_end.replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat((event_end or event_start).replace("Z", "+00:00"))  # default end = start
     except ValueError:
         raise HTTPException(400, "Invalid date format for event start/end. Use YYYY-MM-DDTHH:MM:SS")
 
