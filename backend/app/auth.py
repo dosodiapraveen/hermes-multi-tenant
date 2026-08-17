@@ -35,12 +35,16 @@ async def validate_supabase_jwt(token: str) -> dict:
 
 
 async def verify_jwt(token: str) -> dict:
-    """Validate JWT — try Supabase first, fall back to dev JWT."""
+    """Validate JWT — try Supabase first, fall back to dev JWT.
+    Also falls back on network/DNS errors so an unreachable Supabase (e.g. in
+    this deployment) doesn't break auth for every request."""
     if SUPABASE_AUTH_URL and SUPABASE_ANON_KEY:
         try:
             return await validate_supabase_jwt(token)
         except HTTPException:
-            pass  # Fall through to dev JWT
+            pass                     # invalid/expired -> try dev JWT
+        except Exception:
+            pass                     # Supabase unreachable/DNS -> try dev JWT
     return validate_dev_jwt(token)
 
 
