@@ -744,6 +744,21 @@ async def _process_message_async(
     typing_stop = asyncio.Event()
     typing_task = asyncio.create_task(typing_indicator(chat_id, typing_stop))
     try:
+        # Fast-path: answer direct DB-lookup questions instantly (0 model calls).
+        quick = await try_fast_path(user_id, message)
+        if quick:
+            typing_stop.set()
+            typing_task.cancel()
+            await send_tg(chat_id, quick)
+            await audit_logger.log_event(
+                event_type=AuditLogger.EventType.WEBHOOK_MESSAGE_RECEIVED,
+                severity=AuditLogger.Severity.INFO,
+                user_id=user_id,
+                ip_address=client_ip,
+                details={"note": f"[fast-path] {quick[:140]}"},
+            )
+            return
+
         resp = None
         if is_hermes_runtime:
             # Try Hermes runtime first for hermes users
