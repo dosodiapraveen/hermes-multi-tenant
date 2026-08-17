@@ -72,9 +72,14 @@ def _build_system_prompt_cached(
     """Build system prompt with caching based on content hash."""
     from app.services.persona import DEFAULT_PERSONALITY
 
-    # Create cache key from content hashes
+    # Get current date for context (critical for time-sensitive research)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today_display = datetime.utcnow().strftime("%B %d, %Y")
+
+    # Create cache key from content hashes + date (rotates daily)
     key_parts = [
         agent_name,
+        today,  # Include date so cache rotates daily
         hashlib.md5((personality or "").encode()).hexdigest()[:8],
         hashlib.md5(kb.encode()).hexdigest()[:8] if kb else "",
         hashlib.md5(vault.encode()).hexdigest()[:8] if vault else "",
@@ -84,12 +89,21 @@ def _build_system_prompt_cached(
     if cache_key in _system_prompt_cache:
         return _system_prompt_cache[cache_key]
 
-    # Build the system prompt
+    # Build the system prompt with current date context
+    date_context = f"""📅 **Today's date: {today_display}**
+
+IMPORTANT: Your training data has a knowledge cutoff. When citing statistics, market data, projections, or any time-sensitive information:
+- If the data references future dates that have now passed (e.g., "by 2025" when it's now 2026), use web search to get current/actual figures
+- Always verify market statistics, prices, and projections with web search for accuracy
+- When creating research decks or reports, use web search to get the most recent data available
+"""
+
     if personality and personality.strip():
-        system = f"You are {agent_name}.\n\n{personality.strip()}"
+        system = f"You are {agent_name}.\n\n{date_context}\n{personality.strip()}"
         system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
     else:
         system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
+        system += f"\n\n{date_context}"
         system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
 
     if kb and "No documents" not in kb:
