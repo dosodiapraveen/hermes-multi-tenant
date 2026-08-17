@@ -8,6 +8,7 @@ import os
 import re
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
+import sys, subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from app.logging_config import get_logger
@@ -123,6 +124,29 @@ def build_pptx(deck: dict) -> str:
     return out
 
 
+PPTX_CREATE = "/usr/local/lib/hermes-agent/skills/productivity/powerpoint/scripts/pptx_create.py"
+
+
+def _render_deck(data: dict):
+    """Render a deck JSON spec to a real .pptx using the Hermes 'powerpoint' skill
+    (pptx_create.py), which supports backgrounds/footers/slide numbers/notes."""
+    if not os.path.exists(PPTX_CREATE):
+        return None
+    fin = f"/tmp/deck_in_{int(__import__('time').time())}.json"
+    out = f"/tmp/deck_out_{int(__import__('time').time())}.pptx"
+    try:
+        with open(fin, "w") as f:
+            json.dump(data, f)
+        r = subprocess.run([sys.executable, PPTX_CREATE, fin, out],
+                           capture_output=True, timeout=120)
+        return out if (r.returncode == 0 and os.path.exists(out)) else None
+    except Exception:
+        return None
+    finally:
+        if os.path.exists(fin):
+            os.remove(fin)
+
+
 def try_build_deck(arg: str):
     """If arg looks like a deck-JSON (has a 'slides' list), build a .pptx and return its path.
     Robustly extracts the JSON object from diff/noise-wrapped agent output."""
@@ -148,7 +172,7 @@ def try_build_deck(arg: str):
                 data = None
     if isinstance(data, dict) and isinstance(data.get("slides"), list):
         try:
-            return build_pptx(data)
+            return _render_deck(data)
         except Exception:
             return None
     return None
