@@ -1025,7 +1025,7 @@ export default {
       this.eventForm = {
         title: evt?.title || '',
         description: evt?.description || '',
-        datetime: evt?.event_start || '',
+        datetime: this.toLocalInput(evt?.event_start),
         location: evt?.location || '',
         is_all_day: evt?.is_all_day || false
       }
@@ -1054,9 +1054,9 @@ export default {
               description: this.eventForm.description,
               location: this.eventForm.location,
               is_all_day: this.eventForm.is_all_day,
-              event_start: this.eventForm.datetime,
+              event_start: this.toUtc(this.eventForm.datetime),
               event_end: this.eventForm.is_all_day
-                ? this.eventForm.datetime.slice(0, 10) + 'T23:59:00'
+                ? this.toUtc(this.eventForm.datetime.slice(0, 10) + 'T23:59:00')
                 : this.addHour(this.eventForm.datetime)
             }
 
@@ -1076,7 +1076,16 @@ export default {
     addHour(datetime) {
       const d = new Date(datetime)
       d.setHours(d.getHours() + 1)
-      return d.toISOString().slice(0, 19)
+      return d.toISOString()   // full UTC ISO (with offset) — backend stores the correct instant
+    },
+    toUtc(naive) {              // naive local datetime-local -> UTC instant ISO (Z)
+      return naive ? new Date(naive).toISOString() : naive
+    },
+    toLocalInput(iso) {         // offset-aware ISO -> local datetime-local for the edit input
+      if (!iso) return ''
+      const d = new Date(iso)
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
     },
 
     deleteEvent(id) {
@@ -1100,7 +1109,7 @@ export default {
       this.busy = true
       try {
             if (!this.reminderForm.title || !this.reminderForm.remind_at) return
-            const result = await this.api('POST', '/api/me/reminders', this.reminderForm)
+            const result = await this.api('POST', '/api/me/reminders', { ...this.reminderForm, remind_at: this.toUtc(this.reminderForm.remind_at) })
             if (result?.error) return
             this.showToast('Reminder set successfully')
             this.showReminderModal = false
