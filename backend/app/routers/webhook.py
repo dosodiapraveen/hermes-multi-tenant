@@ -87,20 +87,37 @@ def _deck_text(block) -> str:
 
 
 def build_pptx(deck: dict) -> str:
-    """Convert a deck spec (title/slides) into a .pptx file, return the path."""
+    """Convert a deck spec (title/slides) into a .pptx file, return the path.
+    Uses the blank layout + explicit textboxes so it tolerates any slide layout
+    (title/section/content) without placeholder-index failures."""
     from pptx import Presentation
     from pptx.util import Inches, Pt
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)  # 16:9
-    layout = prs.slide_layouts[1]  # title + content
+    blank = prs.slide_layouts[6]  # Blank
     for s in deck.get("slides", []):
-        slide = prs.slides.add_slide(layout)
-        t = slide.shapes.title
-        if t is not None:
-            t.text = s.get("title", "")
-        body = slide.placeholders[1]
-        if body is not None:
-            body.text = _deck_text(s.get("content", s.get("bullets", "")))
+        if not isinstance(s, dict):
+            continue
+        slide = prs.slides.add_slide(blank)
+        title = str(s.get("title", "")).strip()
+        body_txt = _deck_text(
+            s.get("content") or s.get("bullets") or s.get("subtitle")
+            or s.get("points") or s.get("body") or s.get("notes") or ""
+        )
+        tb = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(12.3), Inches(1.3))
+        run = tb.text_frame.paragraphs[0].add_run()
+        run.text = title
+        run.font.size = Pt(32)
+        run.font.bold = True
+        if body_txt:
+            tb2 = slide.shapes.add_textbox(Inches(0.8), Inches(1.9), Inches(11.7), Inches(5.2))
+            tf = tb2.text_frame
+            tf.word_wrap = True
+            tf.text = body_txt
+            for par in tf.paragraphs:
+                for r in par.runs:
+                    if r.font.size is None:
+                        r.font.size = Pt(18)
     out = f"/tmp/{int(__import__('time').time())}_deck.pptx"
     prs.save(out)
     return out
