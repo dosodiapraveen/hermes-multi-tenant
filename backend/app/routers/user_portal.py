@@ -475,8 +475,8 @@ async def list_events(from_date: str = None, to_date: str = None, user: dict = D
                 "id": str(row[0]),
                 "title": row[1],
                 "description": row[2] or "",
-                "event_start": row[3].astimezone(APP_TZ).isoformat()[:19] if row[3] else "",
-                "event_end": row[4].astimezone(APP_TZ).isoformat()[:19] if row[4] else "",
+                "event_start": _ts_local(row[3]),
+                "event_end": _ts_local(row[4]),
                 "location": row[5] or "",
                 "is_all_day": row[6],
                 "recurrence": row[7] or "none"
