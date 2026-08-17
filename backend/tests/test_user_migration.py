@@ -129,6 +129,16 @@ def main():
     st, d = api("POST", "/api/me/projects", token, {"title": f"{UNIQ}_proj"})
     check("create project", st == 200)
 
+    print("\n-- FAST-PATH (instant DB read, no agent loop) --")
+    t0 = time.time()
+    o, e, c = run(
+        f"docker exec {APIC} python3 -c \"import asyncio;from app.routers.webhook import try_fast_path;"
+        f"r=asyncio.run(try_fast_path('{UID}','what is in my schedule'));print(repr((r or '')[:120]))\"",
+        timeout=30)
+    el = (time.time() - t0) * 1000
+    check("fast-path: schedule answered <2s (0 model calls)",
+          c == 0 and el < 2000, detail=f"{el:.0f}ms -> {o.strip()}")
+
     print("\n-- TIMEZONE (offset-aware round-trip) --")
     # An event created at an explicit offset must be returned as the SAME absolute
     # instant (offset-aware), not naive-UTC (+4h) and not re-encoded.
