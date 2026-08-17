@@ -9,7 +9,7 @@ Performance optimizations:
 import os, json, logging, asyncio
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, AsyncGenerator
 import httpx
 import aiofiles
 import aiofiles.os
@@ -23,6 +23,22 @@ _config_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # Config changes rarely
 _memories_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 _vault_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 _kb_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
+_personality_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
+
+
+async def get_user_personality(uid: str) -> Optional[str]:
+    """Load user personality from DB with caching."""
+    if uid in _personality_cache:
+        return _personality_cache[uid]
+    from app.database import async_session_factory
+    from sqlalchemy import text
+    async with async_session_factory() as db:
+        r = await db.execute(text("SELECT personality FROM user_profiles WHERE id::text=:u"), {"u": uid})
+        row = r.fetchone()
+        personality = (row[0] if row else None) or None
+        _personality_cache[uid] = personality
+        return personality
+
 
 # ── Tool definitions ──
 
@@ -172,13 +188,16 @@ TOOLS = [
     },
 ]
 
+FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
+
+
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
     """Call Fireworks AI and return (content, tool_calls)."""
     body = {"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7}
     if tools: body["tools"] = tools
     async with httpx.AsyncClient(timeout=timeout) as c:
         r = await c.post(
-            "https://api.fireworks.ai/inference/v1/chat/completions",
+            FIREWORKS_URL,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json=body,
         )
@@ -186,6 +205,70 @@ async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, t
         choice = r.json()["choices"][0]
         msg = choice["message"]
         return msg.get("content", ""), msg.get("tool_calls", [])
+
+
+async def call_ai_stream(
+    model: str, messages: list, api_key: str, timeout: int = 60, tools: list = None
+) -> AsyncGenerator[dict, None]:
+    """Stream tokens from Fireworks AI. Yields dicts with type: token|tool_call|done."""
+    body = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "stream": True,
+    }
+    if tools:
+        body["tools"] = tools
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    # Track accumulated tool calls (streamed incrementally)
+    tool_calls_acc: dict = {}
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream("POST", FIREWORKS_URL, headers=headers, json=body) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                if line == "data: [DONE]":
+                    # Yield accumulated tool calls if any
+                    if tool_calls_acc:
+                        for tc in tool_calls_acc.values():
+                            yield {"type": "tool_call", "tool_call": tc}
+                    yield {"type": "done"}
+                    return
+
+                try:
+                    data = json.loads(line[6:])  # Skip "data: "
+                    delta = data.get("choices", [{}])[0].get("delta", {})
+
+                    # Handle content tokens
+                    if "content" in delta and delta["content"]:
+                        yield {"type": "token", "content": delta["content"]}
+
+                    # Handle tool calls (streamed incrementally)
+                    if "tool_calls" in delta:
+                        for tc_delta in delta["tool_calls"]:
+                            idx = tc_delta.get("index", 0)
+                            if idx not in tool_calls_acc:
+                                tool_calls_acc[idx] = {
+                                    "id": tc_delta.get("id", ""),
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                }
+                            tc = tool_calls_acc[idx]
+                            if tc_delta.get("id"):
+                                tc["id"] = tc_delta["id"]
+                            fn = tc_delta.get("function", {})
+                            if fn.get("name"):
+                                tc["function"]["name"] = fn["name"]
+                            if fn.get("arguments"):
+                                tc["function"]["arguments"] += fn["arguments"]
+
+                except json.JSONDecodeError:
+                    continue
 
 
 async def get_user_config(uid: str) -> dict:
@@ -542,36 +625,215 @@ def _should_trigger_search(message: str) -> bool:
     return False
 
 
-async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None, personality: str = None) -> str:
-    """Process a user message through their isolated profile with memory, vault, and tools."""
+async def _execute_tool(uid: str, name: str, args: dict) -> str:
+    """Execute a single tool and return the result string."""
+    if name == "save_note":
+        return await write_note(uid, args.get("title", "Note"), args.get("content", ""))
+    elif name == "read_vault":
+        return await read_vault(uid) or "Vault is empty"
+    elif name == "web_search":
+        result, _ = await search_web(args.get("query", ""))
+        return result
+    elif name == "read_knowledge_base":
+        return await read_knowledge_base(uid)
+    elif name == "create_reminder":
+        return await create_reminder(uid, args.get("title", ""), args.get("remind_at"))
+    elif name == "list_reminders":
+        return await list_reminders(uid)
+    elif name == "create_project":
+        return await create_project(uid, args.get("title", ""), args.get("description", ""))
+    elif name == "list_projects":
+        return await list_projects(uid)
+    elif name == "create_dashboard_note":
+        return await create_dashboard_note(uid, args.get("title", ""), args.get("content", ""), args.get("category", "General"))
+    elif name == "list_dashboard_notes":
+        return await list_dashboard_notes(uid)
+    elif name == "search_user_data":
+        from app.services.search import search_user_data as _search
+        try:
+            _r = await _search(uid, args.get("query", ""), limit=6)
+            _results = _r.get("results", [])
+            if not _results:
+                return "No matches found in your data."
+            _out = ["Here's what I found in your data:"]
+            for _it in _results[:6]:
+                _out.append(f"• [{_it.get('type','')}] {_it.get('title','')}: {_it.get('content','')[:180].replace(chr(10),' ')} (score {_it.get('score','')})")
+            return "\n".join(_out)
+        except Exception as _e:
+            return f"Search error: {_e}"
+    elif name == "get_project_detail":
+        pid = args.get("project_id", "")
+        from app.database import async_session_factory
+        from sqlalchemy import text as sqltext
+        async with async_session_factory() as db:
+            r = await db.execute(sqltext("SELECT title, description, status, updated_at FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": pid, "u": uid})
+            p = r.fetchone()
+            if not p:
+                return "Project not found"
+            rr = await db.execute(sqltext("SELECT title, content FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC"), {"p": pid})
+            research = "\n".join(f"📄 {row[0]}: {row[1][:200]}" for row in rr.fetchall()) or "No research"
+            return f"📋 {p[0]}\n{p[1]}\nStatus: {p[2]}\nUpdated: {str(p[3])[:10]}\n\nResearch:\n{research}"
+    else:
+        return "Done."
+
+
+async def hermes_profile_chat_stream(
+    user_id: str, message: str, timeout: int = 60, profile_dir: str = None, personality: str = None
+) -> AsyncGenerator[dict, None]:
+    """Streaming chat handler. Yields SSE-compatible events."""
     uid = profile_dir.split("/")[-1] if profile_dir else user_id
-
-    # Load config and context concurrently for better performance
-    cfg = await get_user_config(uid)
     api_key = os.environ.get("FIREWORKS_API_KEY", "")
-    model = cfg.get("model", {}).get("model", "accounts/fireworks/models/deepseek-v4-flash-0731")
-
-    # Load memories, vault, and KB concurrently
-    memories, vault, kb = await asyncio.gather(
-        load_memories(uid),
-        read_vault(uid),
-        read_knowledge_base(uid),
-    )
-    agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
 
     from app.services.persona import DEFAULT_PERSONALITY
 
-    # If not supplied, load the agent's personality (SOUL) from the DB.
+    # Send loading status
+    yield {"event": "status", "data": {"status": "loading", "message": "Loading context..."}}
+
+    # Load ALL context in ONE parallel gather
+    personality_coro = (
+        asyncio.sleep(0, result=personality)
+        if (personality and personality.strip())
+        else get_user_personality(user_id)
+    )
+
+    results = await asyncio.gather(
+        get_user_config(uid),
+        load_memories(uid),
+        read_vault(uid),
+        read_knowledge_base(uid),
+        personality_coro,
+        return_exceptions=True,
+    )
+
+    cfg = results[0] if not isinstance(results[0], Exception) else {}
+    memories = results[1] if not isinstance(results[1], Exception) else []
+    vault = results[2] if not isinstance(results[2], Exception) else ""
+    kb = results[3] if not isinstance(results[3], Exception) else ""
+    db_personality = results[4] if not isinstance(results[4], Exception) else None
+
+    model = cfg.get("model", {}).get("model", "accounts/fireworks/models/deepseek-v4-flash-0731")
+    agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
+
     if not (personality and personality.strip()):
-        try:
-            from sqlalchemy import text as _st
-            from app.database import async_session_factory
-            async with async_session_factory() as db:
-                _r = await db.execute(_st("SELECT personality FROM user_profiles WHERE id::text=:u"), {"u": user_id})
-                _row = _r.fetchone()
-                personality = (_row[0] if _row else None) or None
-        except Exception:
-            personality = None
+        personality = db_personality
+
+    # Build system prompt
+    if personality and personality.strip():
+        system = f"You are {agent_name}.\n\n{personality.strip()}"
+        system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
+    else:
+        system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
+        system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
+
+    system += f"\n\n📚 Your knowledge base contains:\n{kb}" if kb and "No documents" not in kb else ""
+    system += f"\n\n📝 Your vault:\n{vault}" if vault else ""
+
+    messages = [{"role": "system", "content": system}]
+    for m in memories[-10:]:
+        if isinstance(m, dict) and "content" in m:
+            messages.append({"role": m.get("role", "user"), "content": m["content"]})
+    messages.append({"role": "user", "content": message})
+
+    # Check if this needs web search
+    should_search = _should_trigger_search(message)
+
+    if should_search:
+        yield {"event": "status", "data": {"status": "searching", "message": "Searching the web..."}}
+        search_results, sources = await search_web(message, 5)
+        context = f"Search results for: {message}\n\n{search_results}"
+        if sources:
+            context += f"\n\nSources:\n{sources}"
+        context += "\n\nUsing the search results above, answer the user's question directly and naturally. Include specific data, names, numbers, and link to sources. Do not mention that you searched."
+        messages = [messages[0], {"role": "system", "content": context}, {"role": "user", "content": message}]
+
+    yield {"event": "status", "data": {"status": "thinking", "message": "Thinking..."}}
+
+    # Stream the response
+    full_response = ""
+    tool_calls_received = []
+
+    async for chunk in call_ai_stream(model, messages, api_key, timeout, tools=None if should_search else TOOLS):
+        if chunk["type"] == "token":
+            full_response += chunk["content"]
+            yield {"event": "chunk", "data": {"token": chunk["content"]}}
+        elif chunk["type"] == "tool_call":
+            tool_calls_received.append(chunk["tool_call"])
+        elif chunk["type"] == "done":
+            break
+
+    # Handle tool calls if any
+    if tool_calls_received:
+        messages.append({"role": "assistant", "content": full_response if full_response else None, "tool_calls": tool_calls_received})
+
+        for tc in tool_calls_received:
+            fn = tc.get("function", {})
+            name = fn.get("name", "")
+            args_raw = fn.get("arguments", "{}")
+
+            yield {"event": "tool_start", "data": {"tool": name, "arguments": args_raw}}
+
+            try:
+                args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
+                result = await _execute_tool(uid, name, args)
+            except Exception as e:
+                result = f"Error: {e}"
+
+            yield {"event": "tool_result", "data": {"tool": name, "result": result[:500]}}
+            messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})
+
+        # Stream final response after tool execution
+        yield {"event": "status", "data": {"status": "thinking", "message": "Processing results..."}}
+        full_response = ""
+        async for chunk in call_ai_stream(model, messages, api_key, timeout, tools=None):
+            if chunk["type"] == "token":
+                full_response += chunk["content"]
+                yield {"event": "chunk", "data": {"token": chunk["content"]}}
+            elif chunk["type"] == "done":
+                break
+
+    # Save memory
+    await save_memory(uid, message, full_response or "")
+
+    yield {"event": "complete", "data": {"response": full_response or "Done."}}
+
+
+async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, profile_dir: str = None, personality: str = None) -> str:
+    """Process a user message through their isolated profile with memory, vault, and tools."""
+    uid = profile_dir.split("/")[-1] if profile_dir else user_id
+    api_key = os.environ.get("FIREWORKS_API_KEY", "")
+
+    from app.services.persona import DEFAULT_PERSONALITY
+
+    # Load ALL context in ONE parallel gather for maximum performance
+    # If personality is already provided, skip the DB lookup
+    personality_coro = (
+        asyncio.sleep(0, result=personality)
+        if (personality and personality.strip())
+        else get_user_personality(user_id)
+    )
+
+    results = await asyncio.gather(
+        get_user_config(uid),
+        load_memories(uid),
+        read_vault(uid),
+        read_knowledge_base(uid),
+        personality_coro,
+        return_exceptions=True,
+    )
+
+    # Unpack results, handling any exceptions
+    cfg = results[0] if not isinstance(results[0], Exception) else {}
+    memories = results[1] if not isinstance(results[1], Exception) else []
+    vault = results[2] if not isinstance(results[2], Exception) else ""
+    kb = results[3] if not isinstance(results[3], Exception) else ""
+    db_personality = results[4] if not isinstance(results[4], Exception) else None
+
+    model = cfg.get("model", {}).get("model", "accounts/fireworks/models/deepseek-v4-flash-0731")
+    agent_name = cfg.get("profile", {}).get("agent_name", "Agent")
+
+    # Use provided personality, or DB personality, or None
+    if not (personality and personality.strip()):
+        personality = db_personality
 
     if personality and personality.strip():
         system = f"You are {agent_name}.\n\n{personality.strip()}"
@@ -620,55 +882,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
                     name = fn.get("name", "")
                     args_raw = fn.get("arguments", "{}")
                     args = json.loads(args_raw) if isinstance(args_raw, str) else args_raw
-                    if name == "save_note":
-                        result = await write_note(uid, args.get("title", "Note"), args.get("content", ""))
-                    elif name == "read_vault":
-                        result = await read_vault(uid) or "Vault is empty"
-                    elif name == "web_search":
-                        result, _ = await search_web(args.get("query", ""))
-                    elif name == "read_knowledge_base":
-                        result = await read_knowledge_base(uid)
-                    elif name == "create_reminder":
-                        result = await create_reminder(uid, args.get("title", ""), args.get("remind_at"))
-                    elif name == "list_reminders":
-                        result = await list_reminders(uid)
-                    elif name == "create_project":
-                        result = await create_project(uid, args.get("title", ""), args.get("description", ""))
-                    elif name == "list_projects":
-                        result = await list_projects(uid)
-
-                    elif name == "create_dashboard_note":
-                        result = await create_dashboard_note(uid, args.get("title", ""), args.get("content", ""), args.get("category", "General"))
-                    elif name == "list_dashboard_notes":
-                        result = await list_dashboard_notes(uid)
-                    elif name == "search_user_data":
-                        from app.services.search import search_user_data as _search
-                        try:
-                            _r = await _search(uid, args.get("query", ""), limit=6)
-                            _results = _r.get("results", [])
-                            if not _results:
-                                result = "No matches found in your data."
-                            else:
-                                _out = ["Here's what I found in your data:"]
-                                for _it in _results[:6]:
-                                    _out.append(f"• [{_it.get('type','')}] {_it.get('title','')}: {_it.get('content','')[:180].replace(chr(10),' ')} (score {_it.get('score','')})")
-                                result = "\n".join(_out)
-                        except Exception as _e:
-                            result = f"Search error: {_e}"
-                    elif name == "get_project_detail":
-                        pid = args.get("project_id", "")
-                        from app.database import async_session_factory
-                        from sqlalchemy import text as sqltext
-                        async with async_session_factory() as db:
-                            r = await db.execute(sqltext("SELECT title, description, status, updated_at FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": pid, "u": uid})
-                            p = r.fetchone()
-                            if not p: result = "Project not found"
-                            else:
-                                rr = await db.execute(sqltext("SELECT title, content FROM project_research WHERE project_id::text=:p ORDER BY created_at DESC"), {"p": pid})
-                                research = "\n".join(f"📄 {row[0]}: {row[1][:200]}" for row in rr.fetchall()) or "No research"
-                                result = f"📋 {p[0]}\n{p[1]}\nStatus: {p[2]}\nUpdated: {str(p[3])[:10]}\n\nResearch:\n{research}"
-                    else:
-                        result = "Done."
+                    result = await _execute_tool(uid, name, args)
                 except Exception as e:
                     result = f"Error: {e}"
                 messages.append({"role": "tool", "tool_call_id": tc.get("id", ""), "content": result})

@@ -727,6 +727,9 @@ async def update_personality(request: Request, body: dict, user: dict = Depends(
     async with async_session_factory() as db:
         await db.execute(text("UPDATE user_profiles SET personality=:p WHERE id::text=:u"), {"p": txt, "u": user["id"]})
         await db.commit()
+    # Invalidate personality cache so next chat uses updated personality
+    from app.services.agent_manager import _personality_cache
+    _personality_cache.pop(user["id"], None)
     return {"status": "saved", "message": "Agent personality updated."}
 
 
@@ -757,11 +760,13 @@ async def chat_with_agent(request: Request, body: dict, user: dict = Depends(res
 @router.get("/chat/stream")
 @limiter.limit("30/minute")
 async def chat_stream(request: Request, message: str, user: dict = Depends(resolve_user)):
-    """SSE streaming chat endpoint - provides real-time feedback.
+    """SSE streaming chat endpoint - streams tokens in real-time.
 
     Returns Server-Sent Events with:
-    - event: status - Processing status updates
-    - event: chunk - Response text chunks (when streaming is supported)
+    - event: status - Processing status updates (loading, thinking, searching)
+    - event: chunk - Individual tokens from the LLM
+    - event: tool_start - Tool execution starting
+    - event: tool_result - Tool execution result
     - event: complete - Final complete response
     - event: error - Error message if something goes wrong
     """
@@ -776,20 +781,14 @@ async def chat_stream(request: Request, message: str, user: dict = Depends(resol
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
     async def generate_response():
-        from app.services.agent_manager import hermes_profile_chat_with_fallback
-
-        # Send initial status
-        yield f"event: status\ndata: {json.dumps({'status': 'processing', 'message': 'Thinking...'})}\n\n"
+        from app.services.agent_manager import hermes_profile_chat_stream
 
         try:
-            # Get the response (currently non-streaming, but provides status feedback)
-            response = await hermes_profile_chat_with_fallback(
+            async for event in hermes_profile_chat_stream(
                 user_id=user["id"],
                 message=message.strip(),
-            )
-
-            # Send the complete response
-            yield f"event: complete\ndata: {json.dumps({'response': response})}\n\n"
+            ):
+                yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
 
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
