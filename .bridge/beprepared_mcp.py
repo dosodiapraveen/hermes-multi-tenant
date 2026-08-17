@@ -81,6 +81,7 @@ TOOLS = [
     {"name": "notes_list", "description": "List the user's notes.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "notes_create", "description": "Create a note for the user.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "content": {"type": "string"}, "category": {"type": "string"}}, "required": ["title"]}},
     {"name": "notes_delete", "description": "Delete a note (id or vault_<file>).", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}}, "required": ["id"]}},
+    {"name": "notes_update", "description": "Update one or more fields of an existing note by id (title/content/category). To APPEND to an existing note, call notes_list first to get its current content+id, combine with the new text, then send the FULL combined content here. ALWAYS use this for 'add to / update a note' — never create a new note for that.", "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}, "title": {"type": "string"}, "content": {"type": "string"}, "category": {"type": "string"}}, "required": ["id"]}},
     {"name": "projects_list", "description": "List the user's projects.", "inputSchema": {"type": "object", "properties": {}}},
     {"name": "projects_create", "description": "Create a project.", "inputSchema": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}}, "required": ["title"]}},
     {"name": "reminders_list", "description": "List the user's reminders.", "inputSchema": {"type": "object", "properties": {}}},
@@ -98,6 +99,8 @@ def dispatch(name, args):
         return call("POST", "/notes", {k: a.get(k) for k in ("title", "content", "category") if k in a})
     if name == "notes_delete":
         return call("DELETE", "/notes/%s" % a.get("id"))
+    if name == "notes_update":
+        return call("PUT", "/notes/%s" % a.get("id"), {k: a.get(k) for k in ("title", "content", "category") if k in a})
     if name == "projects_list":
         return call("GET", "/projects")
     if name == "projects_create":

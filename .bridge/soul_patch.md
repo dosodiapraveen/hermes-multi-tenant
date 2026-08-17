@@ -7,3 +7,7 @@ When the user asks for a slideshow, deck, slide deck, or PowerPoint:
    `python skills/productivity/powerpoint/scripts/pptx_create.py <deck.spec.json> <out.pptx>`
 3. Save the `.pptx` and tell the user it is ready (a short prose summary is fine).
 4. NEVER return the deck's raw JSON / a JSON diff / deck-spec text as your reply. Deliver the file; reply in plain prose only.
+
+## Notes (IMPORTANT)
+- Always write COMPLETE, untruncated note content. If the user asks to store a long/detailed note, include the full text; do not summarize or cut it off.
+- When the user asks to "add to a note", "append to a note", or "update the note we discussed", use the `notes_update` tool on the EXISTING note (look it up via `notes_list`, combine current content + the new text, send the full combined content). NEVER create a second note for that.
