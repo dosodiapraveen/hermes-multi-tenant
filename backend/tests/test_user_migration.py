@@ -129,6 +129,29 @@ def main():
     st, d = api("POST", "/api/me/projects", token, {"title": f"{UNIQ}_proj"})
     check("create project", st == 200)
 
+    print("\n-- TIMEZONE (offset-aware round-trip) --")
+    # An event created at an explicit offset must be returned as the SAME absolute
+    # instant (offset-aware), not naive-UTC (+4h) and not re-encoded.
+    from datetime import datetime as _dt, timezone as _tz
+    def _utc_hour(iso):
+        try:
+            return _dt.fromisoformat(iso.replace("Z", "+00:00")).astimezone(_tz.utc).hour
+        except Exception:
+            return -1
+    def _aware(iso):
+        return bool(iso) and any(c in iso[-6:] for c in "Z+-")
+    api("POST", "/api/me/events", token, {"title": f"{UNIQ}_tzEv",
+        "event_start": "2026-12-01T14:00:00-05:00", "event_end": "2026-12-01T15:00:00-05:00"})
+    _, evs = api("GET", "/api/me/events", token, {})
+    ev = next((e for e in (evs.get("events", []) if isinstance(evs, dict) else []) if e.get("title") == f"{UNIQ}_tzEv"), {})
+    es = ev.get("event_start", "")
+    check("tz: event offset-aware", _aware(es) and _utc_hour(es) == 19, detail=f"ret={es} (expect ...T19:00:00Z)")  # 14:00-05:00 == 19:00Z
+    api("POST", "/api/me/reminders", token, {"title": f"{UNIQ}_tzRm", "remind_at": "2026-12-01T14:00:00+01:00"})
+    _, rms = api("GET", "/api/me/reminders", token, {})
+    rm = next((r for r in (rms.get("reminders", []) if isinstance(rms, dict) else []) if r.get("title") == f"{UNIQ}_tzRm"), {})
+    rs = rm.get("remind_at", "")
+    check("tz: reminder offset-aware (BST-like)", _aware(rs) and _utc_hour(rs) == 13, detail=f"ret={rs} (expect ...T13:00:00Z)")  # 14:00+01:00 == 13:00Z
+
     print("\n-- CHAT -> DASHBOARD (agent via bridge) --")
     r, lat = agent_chat(UID, f"Create an event titled '{UNIQ}_chatEv' at 2026-12-05 14:00. Reply with ONLY: DONE")
     check("agent creates event -> DB", psql(f"SELECT count(*) FROM scheduled_events WHERE user_id='{UID}'") == "1", latency=lat)

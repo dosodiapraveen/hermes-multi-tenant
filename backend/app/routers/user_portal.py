@@ -26,14 +26,11 @@ APP_TZ = ZoneInfo("America/New_York")
 
 
 def _ts_local(val):
-    """Format a stored TIMESTAMPTZ as ET-local naive text ('' if empty).
-    Naive input is assumed to be UTC (as stored). Fixes the +4h dashboard
-    timezone bug across events/reminders/activity/jobs."""
-    if not val:
-        return ""
-    if val.tzinfo is None:
-        val = val.replace(tzinfo=timezone.utc)
-    return val.astimezone(APP_TZ).isoformat()[:19]
+    """Return a stored TIMESTAMPTZ as an offset-aware ISO string (absolute UTC
+    instant, e.g. '...T18:00:00+00:00') so any client/timezone can render it
+    correctly. '' if empty. Fixes the +4h display bug for all users."""
+    return val.isoformat() if val else ""
+
 import asyncio
 
 router = APIRouter(prefix="/api/me", tags=["portal"])
