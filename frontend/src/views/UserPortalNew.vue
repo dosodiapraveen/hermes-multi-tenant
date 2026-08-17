@@ -23,6 +23,14 @@
           <BaseIcon :name="mobileMenuOpen ? 'x' : 'menu'" :size="24" />
         </button>
 
+        <!-- Mobile menu overlay -->
+        <div
+          v-if="mobileMenuOpen"
+          class="mobile-menu-overlay"
+          @click="mobileMenuOpen = false"
+          aria-hidden="true"
+        ></div>
+
         <nav
           id="nav-tabs"
           :class="['nav-tabs', { 'nav-tabs--open': mobileMenuOpen }]"
@@ -44,6 +52,14 @@
               size="sm"
               pill
             />
+          </button>
+          <!-- Logout button in mobile menu -->
+          <button
+            class="nav-tab nav-tab--logout mobile-only"
+            @click="logout"
+          >
+            <BaseIcon name="log-out" :size="16" />
+            <span class="tab-label">Logout</span>
           </button>
         </nav>
 
@@ -613,6 +629,14 @@ export default {
     tab(v) {
       if (v === 'settings') this.loadPersonality()
       this.syncTabToUrl(v)
+    },
+    mobileMenuOpen(isOpen) {
+      // Prevent body scroll when mobile menu is open
+      if (isOpen) {
+        document.body.style.overflow = 'hidden'
+      } else {
+        document.body.style.overflow = ''
+      }
     }
   },
   mounted() {
@@ -626,6 +650,8 @@ export default {
     document.removeEventListener('keydown', this.handleKeydown)
     window.removeEventListener('popstate', this.handlePopState)
     window.removeEventListener('beforeunload', this.handleBeforeUnload)
+    // Clean up body scroll lock
+    document.body.style.overflow = ''
   },
   computed: {
     isMac() {
@@ -1521,11 +1547,22 @@ export default {
   }
 }
 
+/* Mobile-only utility */
+.mobile-only {
+  display: none;
+}
+
+/* Mobile menu overlay */
+.mobile-menu-overlay {
+  display: none;
+}
+
 /* Mobile: Hamburger menu */
 @media (max-width: 640px) {
   .header-content {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--spacing-2);
+    justify-content: space-between;
   }
 
   .header-content h1 {
@@ -1539,30 +1576,60 @@ export default {
   .mobile-menu-btn {
     display: flex;
     order: 0;
+    flex-shrink: 0;
   }
 
   .header-actions {
     order: 2;
     gap: var(--spacing-1);
+    flex-shrink: 0;
+  }
+
+  /* Hide logout and keyboard hint on mobile - logout is in hamburger menu */
+  .header-actions .logout-btn {
+    display: none;
   }
 
   .keyboard-hint-btn {
     display: none;
   }
 
-  .logout-btn .logout-label {
-    display: none;
+  /* Show mobile-only items */
+  .mobile-only {
+    display: flex;
+  }
+
+  /* Mobile menu overlay - dims the background */
+  .mobile-menu-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: calc(var(--z-modal, 50) - 1);
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .nav-tabs {
     display: none;
-    order: 3;
-    width: 100%;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-modal, 50);
+    background: var(--color-surface);
     flex-direction: column;
     gap: var(--spacing-1);
-    padding-top: var(--spacing-3);
-    margin-top: var(--spacing-2);
-    border-top: 1px solid var(--color-border-light);
+    padding: var(--spacing-4);
+    overflow-y: auto;
   }
 
   .nav-tabs--open {
@@ -1573,6 +1640,18 @@ export default {
     width: 100%;
     justify-content: flex-start;
     padding: var(--spacing-3) var(--spacing-4);
+  }
+
+  .nav-tab--logout {
+    margin-top: auto;
+    border-top: 1px solid var(--color-border-light);
+    padding-top: var(--spacing-4);
+    color: var(--color-error-500);
+  }
+
+  .nav-tab--logout:hover {
+    background: var(--color-error-50);
+    color: var(--color-error-600);
   }
 
   .tab-label {
@@ -1784,19 +1863,8 @@ export default {
   opacity: 0;
 }
 
-/* Responsive */
+/* Responsive - Tablet */
 @media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    gap: var(--spacing-3);
-    padding: var(--spacing-3) var(--spacing-4);
-  }
-
-  .header-content h1 {
-    text-align: center;
-    width: 100%;
-  }
-
   .nav-tabs {
     width: 100%;
     overflow-x: auto;
@@ -1821,35 +1889,6 @@ export default {
 
   .welcome-tips {
     grid-template-columns: 1fr;
-  }
-
-  /* Float theme + logout to a persistent corner so it never takes workspace
-     and is always in reach while scrolling. */
-  .header-actions {
-    position: fixed;
-    bottom: 16px;
-    right: 16px;
-    z-index: 1000;
-    margin-left: 0;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg, 12px);
-    padding: 6px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.14);
-    gap: var(--spacing-1);
-  }
-
-  .logout-label {
-    display: none;
-  }
-
-  .portal-main {
-    padding-bottom: 84px;
-  }
-
-  /* Adjust header actions position to avoid FAB overlap */
-  .header-actions {
-    bottom: 80px; /* Above FAB */
   }
 }
 
