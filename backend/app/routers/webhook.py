@@ -502,7 +502,7 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
         return {"status": "ok", "async": True}
 
 
-async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> str | None:
+async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> str | None:
     """Invoke the container's Hermes runtime headlessly for a profile.
 
     Returns the assistant reply, or None if Hermes is unavailable/fails so the
