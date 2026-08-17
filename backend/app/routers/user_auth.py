@@ -225,12 +225,15 @@ async def agent_register(request: Request, body: dict):
        not any(x.islower() for x in password) or not any(x.isdigit() for x in password):
         raise HTTPException(400, "Password must be at least 12 chars with upper, lower and a digit")
 
+    # SECURITY FIX: All operations in single transaction to prevent race condition
+    # where another request could use the same signup token before it's consumed
     async with async_session_factory() as db:
         # Profile must exist (bound to a configured agent); resolve via one-time
         # signup token OR the legacy profile UUID. Enforce expiry for signup tokens.
+        # Use FOR UPDATE to lock the row and prevent concurrent token usage
         rp = await db.execute(text(
             "SELECT id, agent_name, signup_token, signup_expires FROM user_profiles "
-            "WHERE id::text=:t OR signup_token=:t"), {"t": token})
+            "WHERE id::text=:t OR signup_token=:t FOR UPDATE"), {"t": token})
         prof = rp.fetchone()
         if not prof:
             raise HTTPException(404, "Agent not found. Please use the link provided by your admin.")
@@ -271,15 +274,14 @@ async def agent_register(request: Request, body: dict):
                verification_token, verification_expires)
             VALUES (:p, :e, :h, false, :vt, NOW() + INTERVAL '72 hours')
         """), {"p": profile_id, "e": email, "h": hash_password(password), "vt": vtoken})
-        await db.commit()
 
-    # Consume the one-time signup link so it can't be reused.
-    if used_token:
-        async with async_session_factory() as db2:
-            await db2.execute(text(
+        # Consume the one-time signup link atomically within the same transaction
+        if used_token:
+            await db.execute(text(
                 "UPDATE user_profiles SET signup_token=NULL, signup_expires=NULL WHERE id::text=:pid"),
                 {"pid": profile_id})
-            await db2.commit()
+
+        await db.commit()
 
     # Verify token resolves against user_accounts (defensive round-trip)
     async with async_session_factory() as db:

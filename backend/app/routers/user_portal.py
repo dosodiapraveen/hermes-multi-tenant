@@ -40,7 +40,26 @@ OBSIDIAN_ROOT = Path("/opt/hermes/obsidian")
 
 # TTL cache for session token resolution (60 second TTL, max 500 entries)
 # This avoids hitting the database on every API request
-_session_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
+# SECURITY FIX: Reduced TTL to 15 seconds to minimize window after session invalidation
+_session_cache: TTLCache = TTLCache(maxsize=500, ttl=15)
+
+
+def invalidate_session_cache(token: str = None):
+    """Invalidate session cache entry or entire cache.
+
+    SECURITY FIX: Call this when:
+    - User logs out
+    - Password is reset
+    - Account is deactivated
+    - Admin force-logs out a user
+
+    Args:
+        token: Specific token to invalidate. If None, clears entire cache.
+    """
+    if token:
+        _session_cache.pop(token, None)
+    else:
+        _session_cache.clear()
 
 
 async def resolve_user(request: Request) -> dict:
@@ -600,9 +619,18 @@ def calculate_next_run(cron_expression: str) -> str:
             next_run = (now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) + timedelta(days=32)).replace(day=1)
     elif cron_expression.startswith("*/"):  # Every N minutes
         try:
-            mins = int(cron_expression.split()[0].replace("*/", ""))
-            next_run = now + timedelta(minutes=mins)
-        except:
+            parts = cron_expression.split()
+            if parts:
+                mins = int(parts[0].replace("*/", ""))
+                # SECURITY FIX: Enforce minimum 5 minutes, maximum 7 days to prevent DoS
+                if mins < 5:
+                    mins = 5
+                elif mins > 10080:  # 7 days in minutes
+                    mins = 10080
+                next_run = now + timedelta(minutes=mins)
+            else:
+                next_run = now + timedelta(hours=1)
+        except (ValueError, IndexError):
             next_run = now + timedelta(hours=1)
     else:
         # Default: 1 hour from now
@@ -772,7 +800,10 @@ async def chat_with_agent(request: Request, body: dict, user: dict = Depends(res
         )
         return {"response": response, "status": "complete"}
     except Exception as e:
-        return {"response": "Sorry, I encountered an error. Please try again.", "status": "error", "error": str(e)}
+        # SECURITY FIX: Don't leak error details to client
+        import logging
+        logging.getLogger(__name__).error("chat_error", extra={"user_id": user["id"], "error": str(e)})
+        return {"response": "Sorry, I encountered an error. Please try again.", "status": "error"}
 
 
 @router.get("/chat/stream")

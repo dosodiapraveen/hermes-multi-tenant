@@ -81,8 +81,9 @@ async def create_user(body: dict = Body(...), db: AsyncSession = Depends(get_db)
         vault_path = None
         profile_path = None
 
+    # SECURITY FIX: Use json.dumps to prevent JSON injection
     await db.execute(text("INSERT INTO activity_logs (user_id,action,details) VALUES (:uid,'admin_create',:det)"),
-        {"uid": uid, "det": f'{{"plan":"{plan}","profile":"{profile_status}","email":"{email}"}}'})
+        {"uid": uid, "det": json.dumps({"plan": plan, "profile": profile_status, "email": email})})
 
     # Send welcome email if email was provided
     if email:

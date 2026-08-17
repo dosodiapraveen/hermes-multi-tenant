@@ -30,17 +30,30 @@ _system_prompt_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # Cache built sy
 
 # Persistent HTTP client pool for connection reuse
 _http_client: Optional[httpx.AsyncClient] = None
+# SECURITY FIX: Lock to prevent race condition when creating HTTP client
+_http_client_lock: asyncio.Lock = asyncio.Lock()
 
 
 async def get_http_client() -> httpx.AsyncClient:
-    """Get or create the persistent HTTP client with connection pooling."""
+    """Get or create the persistent HTTP client with connection pooling.
+
+    SECURITY FIX: Uses a lock to prevent race condition where multiple
+    clients could be created simultaneously, causing resource leaks.
+    """
     global _http_client
-    if _http_client is None or _http_client.is_closed:
-        _http_client = httpx.AsyncClient(
-            timeout=httpx.Timeout(60.0, connect=10.0),
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
-            http2=True,  # Enable HTTP/2 for better multiplexing
-        )
+    # Fast path: client exists and is open
+    if _http_client is not None and not _http_client.is_closed:
+        return _http_client
+
+    # Slow path: need to create client (with lock)
+    async with _http_client_lock:
+        # Double-check after acquiring lock
+        if _http_client is None or _http_client.is_closed:
+            _http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(60.0, connect=10.0),
+                limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+                http2=True,  # Enable HTTP/2 for better multiplexing
+            )
     return _http_client
 
 

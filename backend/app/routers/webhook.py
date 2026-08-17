@@ -28,14 +28,31 @@ WELCOME = (
     "👉 **Try saying:** *\"Save a note about my meeting today\"* or *\"Search for the latest AI news\"*"
 )
 
+def _safe_chat_id(chat_id: str) -> int:
+    """Safely convert chat_id to int with validation.
+
+    SECURITY FIX: Prevents uncaught ValueError from invalid chat_id.
+    """
+    try:
+        # Strip whitespace and validate it's a valid integer (can be negative for groups)
+        return int(str(chat_id).strip())
+    except (ValueError, TypeError):
+        raise ValueError(f"Invalid chat_id format: {chat_id}")
+
+
 async def typing_indicator(chat_id: str, stop_event: asyncio.Event):
     """Keep typing indicator alive every 4 seconds until stop_event is set."""
+    try:
+        safe_id = _safe_chat_id(chat_id)
+    except ValueError:
+        return  # Invalid chat_id, silently stop typing indicator
+
     while not stop_event.is_set():
         try:
             async with httpx.AsyncClient() as c:
                 await c.post(
                     f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendChatAction",
-                    json={"chat_id": int(chat_id), "action": "typing"},
+                    json={"chat_id": safe_id, "action": "typing"},
                     timeout=5,
                 )
         except: pass
@@ -47,26 +64,34 @@ async def typing_indicator(chat_id: str, stop_event: asyncio.Event):
 async def send_tg(chat_id: str, text: str):
     if not text:
         return
+    try:
+        safe_id = _safe_chat_id(chat_id)
+    except ValueError as e:
+        logger.warning("send_tg_invalid_chat_id", chat_id=chat_id, error=str(e))
+        return
+
     if len(text) > 4000:  # Telegram hard limit; truncate to avoid sendMessage 400
         text = text[:3975] + "\n…(truncated)"
     async with httpx.AsyncClient() as c:
         await c.post(
             f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage",
-            json={"chat_id": int(chat_id), "text": text},  # plain text: robust to markdown/emoji
+            json={"chat_id": safe_id, "text": text},  # plain text: robust to markdown/emoji
         )
 
 
 async def send_tg_file(chat_id: str, path: str, caption: str = ""):
     """Send a file (e.g. .pptx) to Telegram as a document attachment."""
     try:
-        import mimetypes
-    except Exception:
-        pass
+        safe_id = _safe_chat_id(chat_id)
+    except ValueError as e:
+        logger.warning("send_tg_file_invalid_chat_id", chat_id=chat_id, error=str(e))
+        return
+
     async with httpx.AsyncClient(timeout=60) as c:
         with open(path, "rb") as f:
             await c.post(
                 f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendDocument",
-                data={"chat_id": int(chat_id), "caption": caption},
+                data={"chat_id": safe_id, "caption": caption},
                 files={"document": (os.path.basename(path), f,
                                     "application/vnd.openxmlformats-officedocument.presentationml.presentation")},
             )
@@ -372,7 +397,16 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
         if doc:
             try:
                 file_id = doc.get("file_id", "")
-                file_name = doc.get("file_name", "document")
+                file_name_raw = doc.get("file_name", "document")
+                # SECURITY FIX: Sanitize filename to prevent path traversal attacks
+                # Use os.path.basename to strip any directory components
+                file_name = os.path.basename(file_name_raw)
+                # Additional validation: reject suspicious characters
+                if not file_name or '..' in file_name or '/' in file_name or '\\' in file_name:
+                    file_name = f"document_{int(__import__('time').time())}"
+                # Ensure the file has a reasonable extension
+                if not any(file_name.lower().endswith(ext) for ext in ['.pdf', '.doc', '.docx', '.txt', '.md', '.csv', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg']):
+                    file_name = file_name + '.dat'
                 async with httpx.AsyncClient() as c:
                     fr = await c.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getFile?file_id={file_id}")
                     fp = fr.json().get("result", {}).get("file_path", "")
@@ -381,7 +415,10 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
                         uid = str(u[0])
                         kb_dir = Path("/opt/hermes/obsidian") / uid / "Knowledge"
                         kb_dir.mkdir(parents=True, exist_ok=True)
-                        save_path = kb_dir / file_name
+                        # Double-check the final path is within kb_dir (defense in depth)
+                        save_path = (kb_dir / file_name).resolve()
+                        if not str(save_path).startswith(str(kb_dir.resolve())):
+                            raise ValueError("Invalid file path")
                         save_path.write_bytes(dl.content)
 
                         # Log document upload
@@ -630,9 +667,10 @@ async def _log_activity(user_id: str, message: str, request_id: str, client_ip: 
     """Background task to log activity without blocking webhook response."""
     try:
         async with async_session_factory() as db:
+            # SECURITY FIX: Use json.dumps to prevent JSON injection
             await db.execute(
                 text("INSERT INTO activity_logs (user_id,action,details,request_id,ip_address) VALUES (:uid,'message',:det,:rid,:ip)"),
-                {"uid": user_id, "det": '{"platform":"telegram","tokens":' + str(len(message) // 4) + "}", "rid": request_id, "ip": client_ip},
+                {"uid": user_id, "det": json.dumps({"platform": "telegram", "tokens": len(message) // 4}), "rid": request_id, "ip": client_ip},
             )
             await db.commit()
     except Exception as e:

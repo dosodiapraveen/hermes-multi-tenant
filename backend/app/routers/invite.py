@@ -57,9 +57,10 @@ async def redeem(body: InviteLinkRedeem, db: AsyncSession = Depends(get_db)):
         profile_status = f"failed: {e}"
         vault_path = None
 
-    # Log
+    # Log - SECURITY FIX: Use json.dumps to prevent JSON injection
+    import json
     await db.execute(text("INSERT INTO activity_logs (user_id, action, details) VALUES (:uid, 'onboarding', :det)"),
-        {"uid": uid, "det": '{"plan":"' + plan + '","profile":"' + profile_status + '"}'})
+        {"uid": uid, "det": json.dumps({"plan": plan, "profile": profile_status})})
 
     return {
         "status": "ok",

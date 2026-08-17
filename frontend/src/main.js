@@ -59,5 +59,25 @@ router.beforeEach((to, from, next) => {
 })
 
 const app = createApp(App)
+
+// FIX: Global error handler to catch and log unhandled Vue errors
+app.config.errorHandler = (err, instance, info) => {
+  // Log error for debugging
+  console.error('Vue Error:', err)
+  console.error('Component:', instance?.$options?.name || 'Unknown')
+  console.error('Info:', info)
+
+  // In production, you could send this to an error tracking service like Sentry
+  // if (import.meta.env.PROD) {
+  //   sendToErrorTracker(err, instance, info)
+  // }
+}
+
+// FIX: Global warning handler (development only)
+app.config.warnHandler = (msg, instance, trace) => {
+  console.warn('Vue Warning:', msg)
+  if (trace) console.warn('Trace:', trace)
+}
+
 app.use(router)
 app.mount('#app')

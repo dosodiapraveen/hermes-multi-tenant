@@ -1012,7 +1012,13 @@ export default {
         const r = await this.api('GET', '/api/me/personality')
         this.personality = r?.personality || ''
         this.personaAgentName = r?.agent_name || 'Agent'
-      } catch (e) {}
+      } catch (e) {
+        // FIX: Log error instead of silently swallowing
+        console.warn('Failed to load personality:', e?.message || e)
+        // Use defaults on error
+        this.personality = ''
+        this.personaAgentName = 'Agent'
+      }
     },
 
     // Notes

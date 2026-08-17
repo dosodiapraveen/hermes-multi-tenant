@@ -17,12 +17,20 @@ from app.config import settings
 
 
 async def fire_due_reminders() -> int:
+    """Fire due reminders via Telegram.
+
+    SECURITY FIX: Uses FOR UPDATE SKIP LOCKED to prevent duplicate sends
+    when multiple worker instances run concurrently.
+    """
     bot_token = getattr(settings, "telegram_bot_token", None)
     if not bot_token:
         print("REMINDER_WORKER: no bot token configured", flush=True)
         return 0
 
     async with async_session_factory() as db:
+        # Use FOR UPDATE SKIP LOCKED to:
+        # 1. Lock rows being processed (prevents duplicate sends)
+        # 2. Skip rows already locked by another worker instance
         r = await db.execute(text(
             """SELECT r.id,
                       r.title,
@@ -33,12 +41,14 @@ async def fire_due_reminders() -> int:
                JOIN user_profiles up ON up.id = r.user_id
                WHERE r.done = false
                  AND r.remind_at <= NOW()
+               FOR UPDATE OF r SKIP LOCKED
             """
         ))
         rows = r.fetchall()
 
         sent = 0
         sent_ids = []  # Collect IDs for batch update
+        failed_ids = []  # Track failures for retry logic
         async with httpx.AsyncClient(timeout=10) as client:
             for row in rows:
                 rid, title, chat_id, platform, agent_name = row
@@ -60,8 +70,10 @@ async def fire_due_reminders() -> int:
                         sent_ids.append(str(rid))
                     else:
                         print(f"REMINDER_WORKER: send failed {resp.status_code} for reminder {rid}", flush=True)
+                        failed_ids.append(str(rid))
                 except Exception as e:
                     print(f"REMINDER_WORKER: error sending reminder {rid}: {e}", flush=True)
+                    failed_ids.append(str(rid))
 
         # Batch update: mark all successfully sent reminders as done in one query
         if sent_ids:

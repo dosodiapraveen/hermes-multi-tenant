@@ -12,12 +12,12 @@
 
     <!-- Filter Bar -->
     <div class="filter-bar">
+      <!-- FIX: Removed direct emit - debounced via watcher -->
       <BaseInput
         v-model="searchTerm"
         placeholder="Search notes..."
         prefix-icon="search"
         clearable
-        @update:modelValue="$emit('update:search', $event)"
       />
       <BaseSelect
         v-model="categoryFilter"
@@ -128,7 +128,9 @@ export default {
       swipeRefs: {},
       showSwipeHint: !localStorage.getItem('notes-swipe-hint-dismissed'),
       showDeleteConfirm: false,
-      deleteTarget: null
+      deleteTarget: null,
+      // FIX: Debounce timer for search input
+      searchDebounceTimer: null
     }
   },
   computed: {
@@ -160,6 +162,21 @@ export default {
     },
     category(val) {
       this.categoryFilter = val
+    },
+    // FIX: Debounce search input to prevent API flooding
+    searchTerm(val) {
+      if (this.searchDebounceTimer) {
+        clearTimeout(this.searchDebounceTimer)
+      }
+      this.searchDebounceTimer = setTimeout(() => {
+        this.$emit('update:search', val)
+      }, 300) // 300ms debounce
+    }
+  },
+  beforeUnmount() {
+    // Clean up debounce timer
+    if (this.searchDebounceTimer) {
+      clearTimeout(this.searchDebounceTimer)
     }
   },
   methods: {
