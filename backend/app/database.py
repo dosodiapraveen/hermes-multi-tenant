@@ -5,10 +5,11 @@ from app.config import settings
 engine = create_async_engine(
     settings.db_url,
     echo=False,
-    pool_size=20,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,  # Recycle connections every 30 minutes
+    pool_size=20,          # Base pool size for concurrent connections
+    max_overflow=10,       # Additional connections when pool exhausted
+    pool_timeout=30,       # Seconds to wait for connection from pool
+    pool_recycle=1800,     # Recycle connections every 30 minutes
+    pool_pre_ping=True,    # Check connection health before use (prevents stale connections)
 )
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

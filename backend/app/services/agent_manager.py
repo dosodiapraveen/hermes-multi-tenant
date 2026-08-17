@@ -2,11 +2,13 @@
 
 Performance optimizations:
 - Async file I/O with aiofiles
-- TTL caching for user context (memories, vault, config)
+- TTL caching for user context (memories, vault, config, personality, system prompts)
+- Persistent HTTP client pool with connection reuse
 - Async HTTP calls (no blocking requests)
 - Smart search triggering with intent classification
+- Background memory persistence (non-blocking)
 """
-import os, json, logging, asyncio
+import os, json, logging, asyncio, hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, AsyncGenerator
@@ -24,6 +26,30 @@ _memories_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 _vault_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 _kb_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 _personality_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
+_system_prompt_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # Cache built system prompts
+
+# Persistent HTTP client pool for connection reuse
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+async def get_http_client() -> httpx.AsyncClient:
+    """Get or create the persistent HTTP client with connection pooling."""
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            http2=True,  # Enable HTTP/2 for better multiplexing
+        )
+    return _http_client
+
+
+async def close_http_client():
+    """Close the HTTP client (call on shutdown)."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 async def get_user_personality(uid: str) -> Optional[str]:
@@ -38,6 +64,41 @@ async def get_user_personality(uid: str) -> Optional[str]:
         personality = (row[0] if row else None) or None
         _personality_cache[uid] = personality
         return personality
+
+
+def _build_system_prompt_cached(
+    agent_name: str, personality: Optional[str], kb: str, vault: str
+) -> str:
+    """Build system prompt with caching based on content hash."""
+    from app.services.persona import DEFAULT_PERSONALITY
+
+    # Create cache key from content hashes
+    key_parts = [
+        agent_name,
+        hashlib.md5((personality or "").encode()).hexdigest()[:8],
+        hashlib.md5(kb.encode()).hexdigest()[:8] if kb else "",
+        hashlib.md5(vault.encode()).hexdigest()[:8] if vault else "",
+    ]
+    cache_key = ":".join(key_parts)
+
+    if cache_key in _system_prompt_cache:
+        return _system_prompt_cache[cache_key]
+
+    # Build the system prompt
+    if personality and personality.strip():
+        system = f"You are {agent_name}.\n\n{personality.strip()}"
+        system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
+    else:
+        system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
+        system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
+
+    if kb and "No documents" not in kb:
+        system += f"\n\n📚 Your knowledge base contains:\n{kb}"
+    if vault:
+        system += f"\n\n📝 Your vault:\n{vault}"
+
+    _system_prompt_cache[cache_key] = system
+    return system
 
 
 # ── Tool definitions ──
@@ -192,25 +253,31 @@ FIREWORKS_URL = "https://api.fireworks.ai/inference/v1/chat/completions"
 
 
 async def call_ai(model: str, messages: list, api_key: str, timeout: int = 30, tools: list = None) -> tuple:
-    """Call Fireworks AI and return (content, tool_calls)."""
+    """Call Fireworks AI and return (content, tool_calls). Uses persistent HTTP client."""
     body = {"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7}
-    if tools: body["tools"] = tools
-    async with httpx.AsyncClient(timeout=timeout) as c:
-        r = await c.post(
-            FIREWORKS_URL,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=body,
-        )
-        r.raise_for_status()
-        choice = r.json()["choices"][0]
-        msg = choice["message"]
-        return msg.get("content", ""), msg.get("tool_calls", [])
+    if tools:
+        body["tools"] = tools
+    client = await get_http_client()
+    r = await client.post(
+        FIREWORKS_URL,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=body,
+        timeout=timeout,
+    )
+    r.raise_for_status()
+    choice = r.json()["choices"][0]
+    msg = choice["message"]
+    return msg.get("content", ""), msg.get("tool_calls", [])
 
 
 async def call_ai_stream(
     model: str, messages: list, api_key: str, timeout: int = 60, tools: list = None
 ) -> AsyncGenerator[dict, None]:
-    """Stream tokens from Fireworks AI. Yields dicts with type: token|tool_call|done."""
+    """Stream tokens from Fireworks AI. Yields dicts with type: token|tool_call|done.
+
+    Note: Uses a dedicated client for streaming (not the pooled client) because
+    streaming connections are long-lived and shouldn't block the connection pool.
+    """
     body = {
         "model": model,
         "messages": messages,
@@ -226,7 +293,8 @@ async def call_ai_stream(
     # Track accumulated tool calls (streamed incrementally)
     tool_calls_acc: dict = {}
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    # Use dedicated client for streaming (long-lived connections shouldn't block pool)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=10.0)) as client:
         async with client.stream("POST", FIREWORKS_URL, headers=headers, json=body) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
@@ -333,6 +401,17 @@ async def save_memory(uid: str, user_msg: str, ai_msg: str):
 
     # Invalidate cache so next load gets fresh data
     _memories_cache.pop(uid, None)
+
+
+def save_memory_background(uid: str, user_msg: str, ai_msg: str):
+    """Fire-and-forget memory save. Runs in background, doesn't block response."""
+    async def _save_with_error_handling():
+        try:
+            await save_memory(uid, user_msg, ai_msg)
+        except Exception as e:
+            logger.warning(f"Background memory save failed for {uid}: {e}")
+
+    asyncio.create_task(_save_with_error_handling())
 
 
 async def read_vault(uid: str) -> str:
@@ -684,8 +763,6 @@ async def hermes_profile_chat_stream(
     uid = profile_dir.split("/")[-1] if profile_dir else user_id
     api_key = os.environ.get("FIREWORKS_API_KEY", "")
 
-    from app.services.persona import DEFAULT_PERSONALITY
-
     # Send loading status
     yield {"event": "status", "data": {"status": "loading", "message": "Loading context..."}}
 
@@ -717,16 +794,8 @@ async def hermes_profile_chat_stream(
     if not (personality and personality.strip()):
         personality = db_personality
 
-    # Build system prompt
-    if personality and personality.strip():
-        system = f"You are {agent_name}.\n\n{personality.strip()}"
-        system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
-    else:
-        system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
-        system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
-
-    system += f"\n\n📚 Your knowledge base contains:\n{kb}" if kb and "No documents" not in kb else ""
-    system += f"\n\n📝 Your vault:\n{vault}" if vault else ""
+    # Build system prompt (cached based on content hash)
+    system = _build_system_prompt_cached(agent_name, personality, kb, vault)
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -791,8 +860,8 @@ async def hermes_profile_chat_stream(
             elif chunk["type"] == "done":
                 break
 
-    # Save memory
-    await save_memory(uid, message, full_response or "")
+    # Save memory in background (non-blocking)
+    save_memory_background(uid, message, full_response or "")
 
     yield {"event": "complete", "data": {"response": full_response or "Done."}}
 
@@ -801,8 +870,6 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     """Process a user message through their isolated profile with memory, vault, and tools."""
     uid = profile_dir.split("/")[-1] if profile_dir else user_id
     api_key = os.environ.get("FIREWORKS_API_KEY", "")
-
-    from app.services.persona import DEFAULT_PERSONALITY
 
     # Load ALL context in ONE parallel gather for maximum performance
     # If personality is already provided, skip the DB lookup
@@ -835,15 +902,8 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
     if not (personality and personality.strip()):
         personality = db_personality
 
-    if personality and personality.strip():
-        system = f"You are {agent_name}.\n\n{personality.strip()}"
-        system += f"\n\n(This is your personality/SOUL file. Follow it as written in every reply.)"
-    else:
-        system = DEFAULT_PERSONALITY.format(agent_name=agent_name)
-        system += f"\n\nYou are {agent_name}, running with the default personality above. Use your tools (web search, vault, notes, projects, reminders)."
-
-    system += f"\n\n📚 Your knowledge base contains:\n{kb}" if kb and "No documents" not in kb else ""
-    system += f"\n\n📝 Your vault:\n{vault}" if vault else ""
+    # Build system prompt (cached based on content hash)
+    system = _build_system_prompt_cached(agent_name, personality, kb, vault)
 
     messages = [{"role": "system", "content": system}]
     for m in memories[-10:]:
@@ -867,7 +927,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
             retry = [{"role": "system", "content": "Answer the question using this data. Be direct and include details."}]
             retry.append({"role": "user", "content": f"Data:\n{results}\n\nQuestion: {message}"})
             content, _ = await call_ai(model, retry, api_key, timeout)
-        await save_memory(uid, message, content or "Search completed.")
+        save_memory_background(uid, message, content or "Search completed.")
         return content or "Search completed."
     else:
         # Normal flow - let model decide if it needs tools
@@ -889,7 +949,7 @@ async def hermes_profile_chat(user_id: str, message: str, timeout: int = 60, pro
             # Get final response after tool execution
             content, _ = await call_ai(model, messages, api_key, timeout)
 
-    await save_memory(uid, message, content or "")
+    save_memory_background(uid, message, content or "")
     return content or "Done."
 
 
