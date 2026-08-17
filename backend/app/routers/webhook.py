@@ -455,18 +455,17 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 240) -> 
         )
         out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         text = (out or b"").decode("utf-8", "replace")
-        # -Q emits:  [optional reasoning box]  session_id:<id>  <answer>
-        # With reasoning_effort=minimal the reasoning is a short box BEFORE the
-        # session_id header, so the clean answer is everything AFTER the last
-        # session_id: line. Drop reasoning/header/banner no matter where they sit.
-        idx = text.rfind("session_id:")
-        resp_raw = text[idx:] if idx >= 0 else text
-        nl = resp_raw.find("\n")
-        resp_raw = resp_raw[nl+1:] if nl != -1 else ""
-        # Safety: drop any stray box-drawing border lines still present.
+        # -Q emits headers/session-summary lines followed by the actual response
+        # (plain text OR a deck-diff the user wants as .pptx). Drop the CLI chrome
+        # lines but KEEP the full response so deck JSON isn't truncated away.
         resp = "\n".join(
-            ln for ln in resp_raw.split("\n")
-            if not ln.strip().startswith(("┌", "└", "┐", "┘", "│", "╭", "╮", "╰", "╯", "─", "Query:", "Initializing"))
+            ln for ln in text.splitlines()
+            if not ln.strip().startswith((
+                "session_id:", "Session:", "Title:", "Duration:", "Messages:",
+                "Query:", "Initializingagent", "Initializing agent",
+                "┌", "└", "┐", "┘", "│", "╭", "╮", "╰", "╯", "─", "═",
+                "Resume this session", "hermes --resume", "hermes -c",
+            ))
         ).strip() or None
         return resp
     except Exception:
