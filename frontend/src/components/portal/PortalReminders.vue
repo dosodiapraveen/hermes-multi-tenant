@@ -76,8 +76,10 @@ export default {
   methods: {
     formatDateTime(dt) {
       if (!dt) return ''
-      return dt.slice(0, 16).replace('T', ' ')
-    }
+      const d = new Date(dt)   // offset-aware ISO -> browser's local timezone
+      const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+    },
   }
 }
 </script>

@@ -54,7 +54,7 @@ export default {
       const days = {}
 
       for (const a of this.activity || []) {
-        const date = (a.time || '').slice(0, 10)
+        const date = this.fmtLocalDate(a.time)
         if (!date) continue
 
         if (!days[date]) {
@@ -72,7 +72,7 @@ export default {
             title: a.action || 'Activity',
             icon: this.getIcon(a.action),
             type: this.getType(a.action),
-            time: (a.time || '').slice(11, 16),
+            time: this.fmtLocalTime(a.time),
             count: 1
           }
           d.map[key] = item
@@ -90,6 +90,15 @@ export default {
     }
   },
   methods: {
+    fmtLocalDate(dt) {
+      if (!dt) return ''
+      const d = new Date(dt); const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+    },
+    fmtLocalTime(dt) {
+      if (!dt) return ''
+      return new Date(dt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    },
     getIcon(action) {
       const s = (action || '').toLowerCase()
       if (s.includes('note')) return 'file-text'

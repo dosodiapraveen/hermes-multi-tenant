@@ -132,7 +132,8 @@ export default {
     },
     formatDate(date) {
       if (!date) return ''
-      return date.slice(0, 10)
+      const d = new Date(date); const p = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
     },
     truncateContent(content, maxLength = 120) {
       if (!content) return ''
