@@ -179,6 +179,19 @@ export default {
       clearTimeout(this.searchDebounceTimer)
     }
   },
+  watch: {
+    // Auto-expand the newest note so a just-added note shows its FULL content
+    // (otherwise the dashboard preview truncates to 120 chars and looks truncated).
+    notes: {
+      immediate: true,
+      handler(list) {
+        if (Array.isArray(list) && list.length && !this.expandedId) {
+          const newest = [...list].sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0]
+          if (newest) this.expandedId = newest.id
+        }
+      }
+    }
+  },
   methods: {
     toggleExpand(id) {
       this.expandedId = this.expandedId === id ? null : id
