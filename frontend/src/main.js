@@ -52,7 +52,8 @@ const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
-    next('/user/login')
+    // Admin-protected routes must go to the ADMIN login page, not the user portal login.
+    next('/internal/admin-login')
   } else {
     next()
   }
