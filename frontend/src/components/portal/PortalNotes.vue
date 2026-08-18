@@ -57,8 +57,8 @@
             <span class="note-date">{{ formatDate(note.updated_at) }}</span>
           </div>
 
-          <!-- Full content (never hide user's note text) -->
-          <p v-if="note.content" class="note-preview">
+          <!-- Full content, shown once (hidden when expanded to avoid duplication) -->
+          <p v-if="expandedId !== note.id && note.content" class="note-preview">
             {{ note.content }}
           </p>
 
