@@ -96,7 +96,7 @@ export default {
       this.$router.push('/internal/admin-login')
     },
     closeSidebarOnMobile() {
-      if (window.innerWidth < 768) {
+      if (window.innerWidth < 600) {
         this.sidebarOpen = false
       }
     }
@@ -191,7 +191,7 @@ body { font-family:var(--font-family-base); background:var(--color-background); 
 }
 
 /* Mobile responsive */
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .mobile-menu-toggle {
     display: flex;
   }
@@ -215,7 +215,7 @@ body { font-family:var(--font-family-base); background:var(--color-background); 
 }
 
 /* Tablet adjustments */
-@media (min-width: 769px) and (max-width: 1024px) {
+@media (min-width: 601px) and (max-width: 1024px) {
   .sidebar {
     width: 200px;
     min-width: 200px;
