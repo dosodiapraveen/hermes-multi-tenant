@@ -57,9 +57,9 @@
             <span class="note-date">{{ formatDate(note.updated_at) }}</span>
           </div>
 
-          <!-- Content Preview (when collapsed) -->
-          <p v-if="expandedId !== note.id && note.content" class="note-preview">
-            {{ truncateContent(note.content) }}
+          <!-- Full content (never hide user's note text) -->
+          <p v-if="note.content" class="note-preview">
+            {{ note.content }}
           </p>
 
           <Transition name="expand">
@@ -325,10 +325,8 @@ export default {
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
   line-height: var(--line-height-normal);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .note-body {
