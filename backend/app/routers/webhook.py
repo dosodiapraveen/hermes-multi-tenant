@@ -540,6 +540,41 @@ async def telegram(request: Request, background_tasks: BackgroundTasks):
         return {"status": "ok", "async": True}
 
 
+_user_locks: dict = {}
+
+
+def _get_user_lock(user_id: str):
+    """Per-user asyncio lock. Each user gets their own lock so concurrent messages
+    for the SAME user can't race on that user's (per-profile) Hermes session.
+    Distinct users have distinct locks + distinct session dirs -> no cross-user.
+    """
+    lk = _user_locks.get(user_id)
+    if lk is None:
+        lk = asyncio.Lock()
+        _user_locks[user_id] = lk
+    return lk
+
+
+async def _run_hermes(args: list, timeout: int):
+    """Spawn hermes once and return (stdout_bytes, stderr_bytes, returncode)."""
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
+        cwd="/opt/hermes/hermes",
+    )
+    try:
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        return out, err, proc.returncode
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        return None, b"", -1
+
+
 async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> str | None:
     """Invoke the container's Hermes runtime headlessly for a profile.
 
@@ -551,14 +586,19 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> 
     if not herm:
         return None
     try:
-        proc = await asyncio.create_subprocess_exec(
-            herm, "-p", user_id, "chat", "-q", message, "-Q", "--reasoning", "none",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
-            cwd="/opt/hermes/hermes",
-        )
-        out, _err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        lock = _get_user_lock(user_id)
+        async with lock:
+            # Resume the user's OWN latest session (scoped by -p <uuid> to their
+            # profile dir) so the system-prompt prefix is KV-cache reused and the
+            # big first prefill becomes a cache hit. Per-user lock prevents two
+            # concurrent messages for the same user racing on their session.
+            out, _err, rc = await _run_hermes(
+                [herm, "-p", user_id, "chat", "-r", "latest", "-q", message,
+                 "-Q", "--reasoning", "none"], timeout)
+            if out is None or rc != 0:
+                # No session yet (first turn) or a transient error -> fresh session.
+                out, _err, _rc = await _run_hermes(
+                    [herm, "-p", user_id, "chat", "-q", message, "-Q", "--reasoning", "none"], timeout)
         text = (out or b"").decode("utf-8", "replace")
         # -Q emits headers/session-summary lines followed by the actual response
         # (plain text OR a deck-diff the user wants as .pptx). Drop the CLI chrome
