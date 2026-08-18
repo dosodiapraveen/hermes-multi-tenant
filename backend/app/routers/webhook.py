@@ -8,7 +8,7 @@ import os
 import re
 from app.services.profile_init import init_user_profile
 import httpx, json, asyncio
-import sys, subprocess
+import sys, subprocess, time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
@@ -586,6 +586,7 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> 
     if not herm:
         return None
     try:
+        _t = time.perf_counter()
         lock = _get_user_lock(user_id)
         async with lock:
             # Resume the user's OWN latest session (scoped by -p <uuid> to their
@@ -599,6 +600,8 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> 
                 # No session yet (first turn) or a transient error -> fresh session.
                 out, _err, _rc = await _run_hermes(
                     [herm, "-p", user_id, "chat", "-q", message, "-Q", "--reasoning", "none"], timeout)
+        _calls = "; ".join(l.strip() for l in (_err or b"").decode("utf-8", "replace").splitlines() if "latency=" in l)
+        logger.info("hermes_turn", user_id=user_id, elapsed=f"{time.perf_counter()-_t:.1f}s", calls=_calls or "n/a", out_len=len(out or b""))
         text = (out or b"").decode("utf-8", "replace")
         # -Q emits headers/session-summary lines followed by the actual response
         # (plain text OR a deck-diff the user wants as .pptx). Drop the CLI chrome
