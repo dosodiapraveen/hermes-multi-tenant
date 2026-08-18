@@ -118,9 +118,8 @@ async def resolve_user(request: Request) -> dict:
 @router.get("/notes")
 async def list_notes(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
-        # Truncate content to 150 chars for list view to reduce payload by ~60-70%
         r = await db.execute(
-            text("SELECT id, title, LEFT(content, 150) as content_preview, category, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
+            text("SELECT id, title, content, category, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
             {"uid": user["id"]},
         )
         notes = [{"id": str(row[0]), "title": row[1], "content": row[2], "category": row[3], "updated_at": str(row[4])[:19]} for row in r.fetchall()]
@@ -131,7 +130,7 @@ async def list_notes(user: dict = Depends(resolve_user)):
         for f in sorted(inbox.glob("*.md"), reverse=True)[:10]:
             text_content = f.read_text()
             title = text_content.split("\n")[0].replace("# ", "").strip()[:60]
-            vault_notes.append({"id": f"vault_{f.name}", "title": title, "content": text_content[:300], "category": "Vault", "updated_at": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")})
+            vault_notes.append({"id": f"vault_{f.name}", "title": title, "content": text_content, "category": "Vault", "updated_at": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")})
     return {"notes": notes + vault_notes, "user": user["name"]}
 
 @router.post("/notes", dependencies=[Depends(require_csrf)])
