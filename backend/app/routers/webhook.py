@@ -243,7 +243,24 @@ async def deliver_reply(chat_id: str, resp: str):
     if '"slides"' in resp or '"slide_size"' in resp:  # looks like a deck we failed to parse — never dump raw JSON
         await send_tg(chat_id, "I prepared a slideshow for you, but I ran into trouble attaching the file. Ask me again (e.g. \"make that a slideshow again\") and I'll send you the .pptx.")
         return
+    if _looks_like_raw_code(resp):
+        await send_tg(chat_id, "I worked that out as a script for you. If you'd like to see it, just say \"show me the code\" and I'll paste it.")
+        return
     await send_tg(chat_id, resp)
+
+def _looks_like_raw_code(text: str) -> bool:
+    """Detect a reply that is primarily raw generated code / a file diff (not a
+    user-facing answer). Used to stop python/script dumps from leaking to the user."""
+    s = text.lstrip()
+    if re.search(r"^```(?:python|py)\s*$", s, flags=re.M):
+        return True
+    if re.search(r"^(?:def |import |from |class |#!)", s) and len(s) > 200:
+        return True
+    # a generated-file diff (a/... -> b/... plus an @@ hunk header)
+    if re.search(r"\ba//\S+\s*→\s*b//\S+\b", text) and re.search(r"^@@[^@]*@@$", text, flags=re.M):
+        return True
+    return False
+
 
 @router.post("/telegram")
 async def telegram(request: Request, background_tasks: BackgroundTasks):
