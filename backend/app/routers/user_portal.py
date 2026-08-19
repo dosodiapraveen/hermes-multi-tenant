@@ -119,10 +119,10 @@ async def resolve_user(request: Request) -> dict:
 async def list_notes(user: dict = Depends(resolve_user)):
     async with async_session_factory() as db:
         r = await db.execute(
-            text("SELECT id, title, content, category, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
+            text("SELECT id, title, content, category, project_id, updated_at FROM notes WHERE user_id::text=:uid ORDER BY updated_at DESC LIMIT 50"),
             {"uid": user["id"]},
         )
-        notes = [{"id": str(row[0]), "title": row[1], "content": row[2], "category": row[3], "updated_at": str(row[4])[:19]} for row in r.fetchall()]
+        notes = [{"id": str(row[0]), "title": row[1], "content": row[2], "category": row[3], "project_id": str(row[4]) if row[4] else None, "updated_at": str(row[5])[:19]} for row in r.fetchall()]
     # Also include vault notes
     vault_notes = []
     inbox = OBSIDIAN_ROOT / user["id"] / "Inbox"
@@ -138,16 +138,23 @@ async def create_note(request: Request, body: dict, user: dict = Depends(resolve
     title = (body.get("title") or "").strip()
     content = (body.get("content") or "").strip()
     category = (body.get("category") or "General").strip()
+    project_id = None
+    if body.get("project_id"):
+        project_id = str(body["project_id"])
     if not title:
         raise HTTPException(400, "Title required")
     async with async_session_factory() as db:
+        if project_id:
+            chk = await db.execute(text("SELECT 1 FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": project_id, "u": user["id"]})
+            if not chk.fetchone():
+                raise HTTPException(400, "Project not found")
         r = await db.execute(
-            text("INSERT INTO notes (user_id, title, content, category) VALUES (:u, :t, :c, :cat) RETURNING id, created_at"),
-            {"u": user["id"], "t": title, "c": content, "cat": category},
+            text("INSERT INTO notes (user_id, title, content, category, project_id) VALUES (:u, :t, :c, :cat, :pj) RETURNING id, created_at"),
+            {"u": user["id"], "t": title, "c": content, "cat": category, "pj": project_id},
         )
         await db.commit()
         row = r.fetchone()
-        return {"id": str(row[0]), "title": title, "content": content, "category": category, "created_at": str(row[1])[:19]}
+        return {"id": str(row[0]), "title": title, "content": content, "category": category, "project_id": project_id, "created_at": str(row[1])[:19]}
 
 @router.put("/notes/{note_id}", dependencies=[Depends(require_csrf)])
 async def update_note(request: Request, note_id: str, body: dict, user: dict = Depends(resolve_user)):
@@ -160,6 +167,15 @@ async def update_note(request: Request, note_id: str, body: dict, user: dict = D
         if "title" in body: sets.append("title=:t"); params["t"] = body["title"]
         if "content" in body: sets.append("content=:c"); params["c"] = body["content"]
         if "category" in body: sets.append("category=:cat"); params["cat"] = body["category"]
+        if "project_id" in body:
+            pv = body["project_id"]
+            if pv:
+                chk = await db.execute(text("SELECT 1 FROM projects WHERE id::text=:p AND user_id::text=:u"), {"p": str(pv), "u": user["id"]})
+                if not chk.fetchone():
+                    raise HTTPException(400, "Project not found")
+                sets.append("project_id=:pj"); params["pj"] = str(pv)
+            else:
+                sets.append("project_id=NULL")
         if not sets: raise HTTPException(400, "Nothing to update")
         sets.append("updated_at=NOW()")
         await db.execute(text(f"UPDATE notes SET {', '.join(sets)} WHERE id::text=:n"), params)
@@ -227,7 +243,11 @@ async def get_project(project_id: str, user: dict = Depends(resolve_user)):
                        COALESCE(json_agg(
                            json_build_object('id', pr.id::text, 'title', pr.title, 'content', pr.content, 'created_at', to_char(pr.created_at, 'YYYY-MM-DD HH24:MI:SS'))
                            ORDER BY pr.created_at DESC
-                       ) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as research
+                       ) FILTER (WHERE pr.id IS NOT NULL), '[]'::json) as research,
+                       COALESCE(json_agg(
+                           json_build_object('id', n.id::text, 'title', n.title, 'content', n.content, 'category', n.category, 'updated_at', to_char(n.updated_at, 'YYYY-MM-DD HH24:MI:SS'))
+                           ORDER BY n.updated_at DESC
+                       ) FILTER (WHERE n.id IS NOT NULL), '[]'::json) as notes
                 FROM projects p
                 LEFT JOIN LATERAL (
                     SELECT id, title, content, created_at
@@ -236,6 +256,13 @@ async def get_project(project_id: str, user: dict = Depends(resolve_user)):
                     ORDER BY created_at DESC
                     LIMIT 50
                 ) pr ON true
+                LEFT JOIN LATERAL (
+                    SELECT id, title, content, category, updated_at
+                    FROM notes
+                    WHERE project_id = p.id
+                    ORDER BY updated_at DESC
+                    LIMIT 50
+                ) n ON true
                 WHERE p.id::text=:p AND p.user_id::text=:u
                 GROUP BY p.id, p.title, p.description, p.status, p.created_at, p.updated_at
             """),
@@ -247,6 +274,7 @@ async def get_project(project_id: str, user: dict = Depends(resolve_user)):
             "id": str(p[0]), "title": p[1], "description": p[2], "status": p[3],
             "created_at": str(p[4])[:19], "updated_at": str(p[5])[:19] if p[5] else "",
             "research": p[6] if p[6] else [],
+            "notes": p[7] if p[7] else [],
         }
 
 @router.put("/projects/{project_id}", dependencies=[Depends(require_csrf)])
