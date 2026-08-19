@@ -757,7 +757,19 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
                 details={"note": f"[fast-path] {quick[:140]}"},
             )
             return
-        resp = await run_hermes_runtime(user_id, message)
+        async def _slow_ack():
+            # If a turn drags past ~8s, reassure the user it's processing and not
+            # ignored (a silent 2-3 min wait reads as "you're ignoring me").
+            await asyncio.sleep(8)
+            try:
+                await send_tg(chat_id, "Just so you know — I'm still working on this; it's taking a bit longer. I'll reply shortly.")
+            except Exception:
+                pass
+        ack_task = asyncio.create_task(_slow_ack())
+        try:
+            resp = await run_hermes_runtime(user_id, message)
+        finally:
+            ack_task.cancel()
         if resp is None:
             resp = await hermes_profile_chat_with_fallback(
                 user_id=user_id,
