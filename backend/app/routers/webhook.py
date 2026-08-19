@@ -572,8 +572,23 @@ def _get_user_lock(user_id: str):
     return lk
 
 
-async def _run_hermes(args: list, timeout: int):
-    """Spawn hermes once and return (stdout_bytes, stderr_bytes, returncode)."""
+async def _read_stream(stream, sink, prog):
+    while True:
+        chunk = await stream.read(2048)
+        if not chunk:
+            break
+        sink.append(chunk)
+        prog["last"] = time.monotonic()
+        prog["bytes"] += len(chunk)
+
+
+async def _run_hermes(args: list, timeout: int, stall_s: int = 55):
+    """Spawn hermes once. Returns (stdout, stderr, returncode).
+
+    Progress-aware: while hermes produces output (each API call prints a line) it
+    runs; if it goes SILENT for > `stall_s` (a model call hung), we kill it and
+    return -1 so the caller can fail fast instead of stranding the user ~3min.
+    """
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
@@ -581,14 +596,36 @@ async def _run_hermes(args: list, timeout: int):
         env={**os.environ, "HERMES_HOME": "/opt/hermes/hermes"},
         cwd="/opt/hermes/hermes",
     )
+    out, err = [], []
+    prog = {"last": time.monotonic(), "bytes": 0, "deadline": time.monotonic() + timeout}
+    rt = asyncio.create_task(_read_stream(proc.stdout, out, prog))
+    re = asyncio.create_task(_read_stream(proc.stderr, err, prog))
     try:
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return out, err, proc.returncode
-    except asyncio.TimeoutError:
+        rc = None
+        while rc is None:
+            try:
+                rc = await asyncio.wait_for(proc.wait(), timeout=3)
+            except asyncio.TimeoutError:
+                now = time.monotonic()
+                if now > prog["deadline"]:
+                    break  # total cap
+                if now - prog["last"] > stall_s:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    rc = await proc.wait()
+                    break
+        rt.cancel()
+        re.cancel()
+        return b"".join(out), b"".join(err), rc if rc is not None else -1
+    except Exception:
         try:
             proc.kill()
         except Exception:
             pass
+        rt.cancel()
+        re.cancel()
         return None, b"", -1
 
 
@@ -613,10 +650,19 @@ async def run_hermes_runtime(user_id: str, message: str, timeout: int = 360) -> 
             out, _err, rc = await _run_hermes(
                 [herm, "-p", user_id, "chat", "-r", "latest", "-q", message,
                  "-Q", "--reasoning", "none"], timeout)
+            if rc == -1:
+                # A model call stalled (watchdog killed it). Don't burn another
+                # ~55s on a fresh retry - return None so the caller tells the
+                # user promptly instead of stranding them for minutes.
+                logger.info("hermes_stall", user_id=user_id, stage="resume")
+                return None
             if out is None or rc != 0:
                 # No session yet (first turn) or a transient error -> fresh session.
-                out, _err, _rc = await _run_hermes(
+                out, _err, rc = await _run_hermes(
                     [herm, "-p", user_id, "chat", "-q", message, "-Q", "--reasoning", "none"], timeout)
+                if rc == -1:
+                    logger.info("hermes_stall", user_id=user_id, stage="fresh")
+                    return None
         _calls = "; ".join(l.strip() for l in (_err or b"").decode("utf-8", "replace").splitlines() if "latency=" in l)
         logger.info("hermes_turn", user_id=user_id, elapsed=f"{time.perf_counter()-_t:.1f}s", calls=_calls or "n/a", out_len=len(out or b""))
         text = (out or b"").decode("utf-8", "replace")
@@ -771,11 +817,10 @@ async def _run_hermes_async(user_id: str, chat_id: str, message: str, client_ip:
         finally:
             ack_task.cancel()
         if resp is None:
-            resp = await hermes_profile_chat_with_fallback(
-                user_id=user_id,
-                message=message,
-                profile_dir=None,
-            )
+            # Hermes failed/stalled/timed out. Be honest with the user instead of
+            # silently falling back to a slower, weaker legacy path (or a blank).
+            resp = ("I hit a temporary hiccup and couldn't finish that request (it's on my "
+                    "end, not yours). Please try again in a moment — sorry!")
         if resp:
             await deliver_reply(chat_id, resp)
         else:
