@@ -109,10 +109,38 @@
           action-label="Add Research"
           @action="$emit('openResearch')"
         />
-      </div>
-    </div>
-  </section>
-</template>
+        </div>
+
+        <!-- Notes Section (project-linked notes grouped here) -->
+        <div class="research-section">
+        <div class="research-header">
+        <h3>
+          <BaseIcon name="file-text" :size="18" />
+          Notes
+        </h3>
+        </div>
+        <div v-if="selectedProject.notes?.length" class="research-list">
+        <BaseCard v-for="n in selectedProject.notes" :key="n.id" class="research-card">
+          <div class="research-content">
+            <div class="research-info">
+              <strong>{{ n.title }}</strong>
+              <p class="note-entry">{{ n.content }}</p>
+              <span class="research-meta">{{ formatDate(n.updated_at) }}</span>
+            </div>
+          </div>
+        </BaseCard>
+        </div>
+        <BaseEmptyState
+        v-else
+        compact
+        icon="file-text"
+        title="No notes for this project"
+        description="Notes filed under this project will appear here, grouped under the project."
+        />
+        </div>
+        </div>
+        </section>
+        </template>
 
 <script>
 import { BaseCard, BaseIcon, BaseBadge, BaseButton, BaseSelect, BaseEmptyState } from '@design-system/components/ui'
