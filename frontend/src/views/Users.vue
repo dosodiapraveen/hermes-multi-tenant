@@ -95,28 +95,27 @@ export default {
 </script>
 
 <style scoped>
-table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; }
-th { text-align:left; padding:12px 16px; font-size:11px; text-transform:uppercase; color:#636E70; background:#F8F9FA; border-bottom:1px solid #DFE6E9; }
-td { padding:12px 16px; border-bottom:1px solid #DFE6E9; font-size:13px; }
-.badge { font-size:11px; padding:2px 8px; border-radius:4px; background:#F0F2F5; }
-.green { color:#00B894; font-weight:500; }
-.muted { color:#B2BEC3; }
-.btn-del { padding:5px 12px; border:none; border-radius:6px; background:rgba(225,112,85,0.1); color:#E17055; font-size:12px; font-weight:500; cursor:pointer; }
-.btn-access { padding:5px 12px; border:none; border-radius:6px; background:rgba(108,92,231,0.1); color:#6C5CE7; font-size:12px; font-weight:500; cursor:pointer; margin-right:6px; }
-.btn-access:hover { background:rgba(108,92,231,0.2); }
+table { width:100%; border-collapse:collapse; background:var(--color-surface); border-radius:10px; overflow:hidden; }
+th { text-align:left; padding:12px 16px; font-size:11px; text-transform:uppercase; color:var(--color-text-tertiary); background:var(--color-gray-50); border-bottom:1px solid var(--color-border); }
+td { padding:12px 16px; border-bottom:1px solid var(--color-border); font-size:13px; color:var(--color-text-primary); }
+.badge { font-size:11px; padding:2px 8px; border-radius:4px; background:var(--color-gray-100); color:var(--color-text-secondary); }
+.green { color:var(--color-success-500); font-weight:500; }
+.muted { color:var(--color-text-tertiary); }
+.btn-del { padding:5px 12px; border:none; border-radius:6px; background:var(--color-error-50); color:var(--color-error-500); font-size:12px; font-weight:500; cursor:pointer; }
+.btn-access { padding:5px 12px; border:none; border-radius:6px; background:var(--color-primary-100); color:var(--color-primary-500); font-size:12px; font-weight:500; cursor:pointer; margin-right:6px; }
+.btn-access:hover { background:var(--color-primary-200); }
 .btn-access:disabled { opacity:.6; }
-.btn-del:hover { background:rgba(225,112,85,0.2); }
-.overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.dialog { background:white; border-radius:14px; padding:28px; max-width:420px; width:90%; }
-.dialog h3 { font-size:18px; font-weight:700; margin-bottom:8px; }
-.dialog p { font-size:14px; color:#1A1A2E; }
+.btn-del:hover { background:var(--color-error-100); }
+.overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:var(--modal-backdrop); display:flex; align-items:center; justify-content:center; z-index:1000; }
+.dialog { background:var(--color-surface); border-radius:14px; padding:28px; max-width:420px; width:90%; }
+.dialog h3 { font-size:18px; font-weight:700; margin-bottom:8px; color:var(--color-text-primary); }
+.dialog p { font-size:14px; color:var(--color-text-primary); }
 .dialog-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
-.btn-cancel { padding:9px 20px; border:1.5px solid #DFE6E9; border-radius:8px; background:white; font-size:13px; font-weight:500; cursor:pointer; }
-.btn-cancel:hover { border-color:#636E70; }
-.linkbox { width:100%; max-width:100%; padding:10px 12px; border:1.5px solid #DFE6E9; border-radius:8px; font-size:12px; font-family:monospace; color:#1A1A2E; background:#F8F9FA; box-sizing:border-box; margin:6px 0 2px; }
-.copied { color:#00B894; font-size:13px; font-weight:500; margin-top:4px; }
-.err { color:#E17055; font-size:13px; margin-top:6px; }
-.btn-copy { padding:9px 20px; border:none; border-radius:8px; background:#6C5CE7; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
-.btn-copy:hover { background:#5a4bd4; }
-
+.btn-cancel { padding:9px 20px; border:1.5px solid var(--color-border); border-radius:8px; background:var(--color-surface); color:var(--color-text-secondary); font-size:13px; font-weight:500; cursor:pointer; }
+.btn-cancel:hover { border-color:var(--color-text-tertiary); }
+.linkbox { width:100%; max-width:100%; padding:10px 12px; border:1.5px solid var(--color-border); border-radius:8px; font-size:12px; font-family:monospace; color:var(--color-text-primary); background:var(--color-gray-50); box-sizing:border-box; margin:6px 0 2px; }
+.copied { color:var(--color-success-500); font-size:13px; font-weight:500; margin-top:4px; }
+.err { color:var(--color-error-500); font-size:13px; margin-top:6px; }
+.btn-copy { padding:9px 20px; border:none; border-radius:8px; background:var(--color-primary-500); color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-copy:hover { background:var(--color-primary-600); }
 </style>

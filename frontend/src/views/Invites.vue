@@ -240,13 +240,13 @@ export default {
 .page-header h1 {
   font-size: 26px;
   font-weight: 700;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
   margin-bottom: 4px;
 }
 
 .page-header p {
   font-size: 14px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
 }
 
 .create-btn {
@@ -270,7 +270,7 @@ export default {
 }
 
 .create-form {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 14px;
   padding: 24px;
   margin-bottom: 24px;
@@ -280,7 +280,7 @@ export default {
 .create-form h3 {
   font-size: 16px;
   font-weight: 700;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
   margin-bottom: 20px;
 }
 
@@ -300,17 +300,18 @@ export default {
 .form-group label {
   font-size: 13px;
   font-weight: 600;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
 }
 
 .form-group input,
 .form-group select {
   padding: 10px 14px;
-  border: 1.5px solid #E2E8F0;
+  border: 1.5px solid var(--color-border);
   border-radius: 8px;
   font-family: 'Inter', sans-serif;
   font-size: 14px;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
+  background: var(--color-surface);
   outline: none;
   transition: border-color 0.2s;
 }
@@ -332,7 +333,7 @@ export default {
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -350,9 +351,9 @@ export default {
 
 .cancel-btn {
   padding: 10px 20px;
-  border: 1.5px solid #E2E8F0;
-  background: #fff;
-  color: #636E70;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-family: 'Inter', sans-serif;
   font-size: 14px;
   font-weight: 500;
@@ -362,7 +363,7 @@ export default {
 }
 
 .cancel-btn:hover {
-  background: #F8FAFC;
+  background: var(--color-surface-hover);
 }
 
 .submit-btn {
@@ -403,12 +404,12 @@ export default {
 .loading-state {
   text-align: center;
   padding: 60px 20px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
   font-size: 15px;
 }
 
 .table-container {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -421,7 +422,7 @@ export default {
 }
 
 .data-table thead {
-  background: #F8FAFC;
+  background: var(--color-gray-50);
 }
 
 .data-table th {
@@ -431,14 +432,14 @@ export default {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #636E70;
-  border-bottom: 1px solid #E2E8F0;
+  color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .data-table td {
   padding: 14px 20px;
-  color: #1A1A2E;
-  border-bottom: 1px solid #F0F2F5;
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .data-table tbody tr:last-child td {
@@ -446,7 +447,7 @@ export default {
 }
 
 .data-table tbody tr:hover {
-  background: #FAFBFC;
+  background: var(--color-surface-hover);
 }
 
 .cell-label {
@@ -464,7 +465,7 @@ export default {
   white-space: nowrap;
   font-family: 'SF Mono', 'Menlo', monospace;
   font-size: 12px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
 }
 
 .plan-badge {
@@ -474,8 +475,8 @@ export default {
   font-size: 12px;
   font-weight: 600;
   text-transform: capitalize;
-  background: #F0F2F5;
-  color: #636E70;
+  background: var(--color-gray-100);
+  color: var(--color-text-secondary);
 }
 
 .plan-badge.badge-trial {
@@ -518,9 +519,9 @@ export default {
 
 .copy-btn {
   padding: 6px 14px;
-  border: 1.5px solid #E2E8F0;
-  background: #fff;
-  color: #6C5CE7;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-primary-500);
   font-family: 'Inter', sans-serif;
   font-size: 12px;
   font-weight: 600;
@@ -530,25 +531,25 @@ export default {
 }
 
 .copy-btn:hover {
-  background: rgba(108, 92, 231, 0.05);
-  border-color: #6C5CE7;
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-500);
 }
 
 .delete-btn {
   margin-left: 8px; padding: 6px 14px;
-  border: 1.5px solid #FEB2B2; background: #fff;
-  color: #E53E3E; font-family: 'Inter', sans-serif;
+  border: 1.5px solid var(--color-error-200); background: var(--color-surface);
+  color: var(--color-error-500); font-family: 'Inter', sans-serif;
   font-size: 12px; font-weight: 600;
   border-radius: 6px; cursor: pointer;
   transition: all 0.15s;
 }
-.delete-btn:hover:not(:disabled) { background: #FFF5F5; border-color: #FC8181; }
+.delete-btn:hover:not(:disabled) { background: var(--color-error-50); border-color: var(--color-error-400); }
 .delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .empty-state {
   text-align: center;
   padding: 40px 20px !important;
-  color: #636E70;
+  color: var(--color-text-tertiary);
   font-size: 14px;
 }
 

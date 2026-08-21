@@ -125,24 +125,24 @@ export default {
 .page-header h1 {
   font-size: 26px;
   font-weight: 700;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
   margin-bottom: 4px;
 }
 
 .page-header p {
   font-size: 14px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
 }
 
 .loading-state {
   text-align: center;
   padding: 60px 20px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
   font-size: 15px;
 }
 
 .settings-card {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 14px;
   padding: 28px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
@@ -151,13 +151,13 @@ export default {
 .settings-card h3 {
   font-size: 18px;
   font-weight: 700;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
   margin-bottom: 4px;
 }
 
 .card-desc {
   font-size: 14px;
-  color: #636E70;
+  color: var(--color-text-tertiary);
   margin-bottom: 24px;
 }
 
@@ -171,35 +171,35 @@ export default {
 .form-group label {
   font-size: 14px;
   font-weight: 600;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
 }
 
 .form-group select {
   padding: 12px 16px;
-  border: 1.5px solid #E2E8F0;
+  border: 1.5px solid var(--color-border);
   border-radius: 10px;
   font-family: 'Inter', sans-serif;
   font-size: 14px;
-  color: #1A1A2E;
+  color: var(--color-text-primary);
   outline: none;
   transition: border-color 0.2s;
-  background: #fff;
+  background: var(--color-surface);
   cursor: pointer;
 }
 
 .form-group select:focus {
-  border-color: #6C5CE7;
+  border-color: var(--color-primary-500);
   box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
 }
 
 .help-text {
   font-size: 12px;
-  color: #A0AEC0;
+  color: var(--color-text-tertiary);
 }
 
 .error-message {
-  background: #FFF5F5;
-  color: #E53E3E;
+  background: var(--color-error-50);
+  color: var(--color-error-600);
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 13px;
@@ -208,8 +208,8 @@ export default {
 }
 
 .success-message {
-  background: #F0FFF4;
-  color: #00C875;
+  background: var(--color-success-50);
+  color: var(--color-success-600);
   padding: 10px 14px;
   border-radius: 8px;
   font-size: 13px;

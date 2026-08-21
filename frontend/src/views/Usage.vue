@@ -82,18 +82,18 @@ export default {
 </script>
 
 <style scoped>
-.loading { padding:40px; text-align:center; color:#636E70; }
-.error { padding:20px; background:#FFF5F5; color:#E53E3E; border-radius:8px; margin-bottom:16px; }
+.loading { padding:40px; text-align:center; color:var(--color-text-tertiary); }
+.error { padding:20px; background:var(--color-error-50); color:var(--color-error-600); border-radius:8px; margin-bottom:16px; }
 .summary { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-.card { background:white; border:1px solid #E8EAED; border-radius:10px; padding:20px; }
-.val { font-size:28px; font-weight:800; }
-.lbl { font-size:13px; color:#636E70; margin-top:2px; }
-.chart { display:flex; gap:12px; align-items:flex-end; background:white; border:1px solid #E8EAED; border-radius:10px; padding:20px; min-height:160px; }
+.card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px; padding:20px; }
+.val { font-size:28px; font-weight:800; color:var(--color-text-primary); }
+.lbl { font-size:13px; color:var(--color-text-tertiary); margin-top:2px; }
+.chart { display:flex; gap:12px; align-items:flex-end; background:var(--color-surface); border:1px solid var(--color-border); border-radius:10px; padding:20px; min-height:160px; }
 .bar-wrap { display:flex; flex-direction:column; align-items:center; flex:1; }
-.bar { width:32px; background:#6C5CE7; border-radius:4px 4px 0 0; min-height:4px; }
-.bar-val { font-size:12px; font-weight:600; margin-top:4px; }
-.bar-lbl { font-size:10px; color:#636E70; margin-top:2px; }
-table { width:100%; border-collapse:collapse; background:white; border-radius:10px; overflow:hidden; }
-th { text-align:left; padding:12px 16px; font-size:11px; text-transform:uppercase; color:#636E70; background:#F8F9FA; border-bottom:1px solid #DFE6E9; }
-td { padding:12px 16px; border-bottom:1px solid #DFE6E9; font-size:13px; }
+.bar { width:32px; background:var(--color-primary-500); border-radius:4px 4px 0 0; min-height:4px; }
+.bar-val { font-size:12px; font-weight:600; margin-top:4px; color:var(--color-text-primary); }
+.bar-lbl { font-size:10px; color:var(--color-text-tertiary); margin-top:2px; }
+table { width:100%; border-collapse:collapse; background:var(--color-surface); border-radius:10px; overflow:hidden; }
+th { text-align:left; padding:12px 16px; font-size:11px; text-transform:uppercase; color:var(--color-text-tertiary); background:var(--color-gray-50); border-bottom:1px solid var(--color-border); }
+td { padding:12px 16px; border-bottom:1px solid var(--color-border); font-size:13px; color:var(--color-text-primary); }
 </style>

@@ -98,32 +98,32 @@ export default {
 
 <style scoped>
 *{box-sizing:border-box}
-.regreq-page{min-height:100vh;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-header{background:#fff;border-bottom:1px solid #eee;padding:20px 28px}
-header h1{margin:0;font-size:22px;color:#1A1A2E}
-header .sub{margin:6px 0 14px;color:#636E70;font-size:14px}
+.regreq-page{min-height:100vh;background:var(--color-background);font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+header{background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:20px 28px}
+header h1{margin:0;font-size:22px;color:var(--color-text-primary)}
+header .sub{margin:6px 0 14px;color:var(--color-text-tertiary);font-size:14px}
 nav{display:flex;gap:8px}
-nav button{padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-size:14px}
-nav button.active{background:#6C5CE7;color:#fff;border-color:#6C5CE7}
-nav .badge{background:#ff4757;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;width:auto}
+nav button{padding:8px 16px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface);color:var(--color-text-primary);cursor:pointer;font-size:14px}
+nav button.active{background:var(--color-primary-500);color:#fff;border-color:var(--color-primary-500)}
+nav .badge{background:var(--color-error-500);color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;width:auto}
 main{max-width:860px;margin:0 auto;padding:24px}
-.card{background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.card{background:var(--color-surface);border-radius:12px;padding:18px 20px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
 .row-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .id-col{flex:1;min-width:200px}
-.id-col strong{font-size:16px}
-.meta{font-size:13px;color:#636E70;margin-top:3px}
+.id-col strong{font-size:16px;color:var(--color-text-primary)}
+.meta{font-size:13px;color:var(--color-text-tertiary);margin-top:3px}
 .badges{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .badge{font-size:12px;padding:3px 10px;border-radius:10px;white-space:nowrap}
-.badge.ok{background:#d4edda;color:#155724}
-.badge.warn{background:#fff3cd;color:#856404}
-.badge.pending{background:#cce5ff;color:#004085}
-.badge.approved{background:#d4edda;color:#155724}
-.badge.rejected{background:#f8d7da;color:#721c24}
-.actions{margin-top:14px;border-top:1px solid #eee;padding-top:14px;display:flex;flex-direction:column;gap:10px}
+.badge.ok{background:var(--color-success-100);color:var(--color-success-700)}
+.badge.warn{background:var(--color-warning-100);color:var(--color-warning-700)}
+.badge.pending{background:var(--color-info-100);color:var(--color-info-700)}
+.badge.approved{background:var(--color-success-100);color:var(--color-success-700)}
+.badge.rejected{background:var(--color-error-100);color:var(--color-error-700)}
+.actions{margin-top:14px;border-top:1px solid var(--color-border);padding-top:14px;display:flex;flex-direction:column;gap:10px}
 .approve-box,.reject-box{display:flex;gap:8px;flex-wrap:wrap}
-.approve-box input,.approve-box select,.reject-box input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;flex:1;min-width:120px}
-.btn-approve{background:#16a34a;color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px}
-.btn-reject{background:#dc2626;color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px}
-.empty{color:#888;text-align:center;padding:40px}
-.reviewed{color:#888;font-size:12px;margin-top:10px}
+.approve-box input,.approve-box select,.reject-box input{padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;font-size:13px;flex:1;min-width:120px;background:var(--color-surface);color:var(--color-text-primary)}
+.btn-approve{background:var(--color-success-600);color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px}
+.btn-reject{background:var(--color-error-600);color:#fff;border:none;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:13px}
+.empty{color:var(--color-text-tertiary);text-align:center;padding:40px}
+.reviewed{color:var(--color-text-tertiary);font-size:12px;margin-top:10px}
 </style>
