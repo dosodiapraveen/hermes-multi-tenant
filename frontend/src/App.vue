@@ -83,27 +83,30 @@ export default {
   data() {
     return {
       userEmail: localStorage.getItem('email') || 'Admin',
-      sidebarOpen: false
+      sidebarOpen: false,
+      isLoggedIn: !!localStorage.getItem('token')
     }
-  },
-  computed: {
-    isLoggedIn() { return !!localStorage.getItem('token') }
   },
   methods: {
     logout() {
       localStorage.removeItem('token')
       localStorage.removeItem('email')
+      this.isLoggedIn = false
       this.$router.push('/internal/admin-login')
     },
     closeSidebarOnMobile() {
       if (window.innerWidth < 600) {
         this.sidebarOpen = false
       }
+    },
+    checkAuth() {
+      this.isLoggedIn = !!localStorage.getItem('token')
+      this.userEmail = localStorage.getItem('email') || 'Admin'
     }
   },
   created() {
     this.$router.afterEach(() => {
-      this.userEmail = localStorage.getItem('email') || 'Admin'
+      this.checkAuth()
     })
   }
 }

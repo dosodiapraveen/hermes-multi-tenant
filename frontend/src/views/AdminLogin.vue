@@ -64,8 +64,10 @@ export default {
 .form-group { display:flex; flex-direction:column; gap:6px; }
 .form-group label { font-size:13px; font-weight:600; color:#1A1A2E; }
 .form-group input { padding:12px 16px; border:1.5px solid #E2E8F0; border-radius:10px;
-  font-family:'Inter',sans-serif; font-size:14px; outline:none; }
+  font-family:'Inter',sans-serif; font-size:14px; outline:none; background:#fff; color:#1A1A2E; }
+.form-group input::placeholder { color:#9CA3AF; }
 .form-group input:focus { border-color:#6C5CE7; box-shadow:0 0 0 3px rgba(108,92,231,0.1); }
+.form-group input:-webkit-autofill { -webkit-box-shadow:0 0 0 1000px #fff inset; -webkit-text-fill-color:#1A1A2E; }
 .error-message { background:#FFF5F5; color:#E53E3E; padding:10px 14px; border-radius:8px; font-size:13px; }
 .login-btn { padding:12px; border:none; background:#6C5CE7; color:#fff; font-family:'Inter',sans-serif;
   font-size:15px; font-weight:600; border-radius:10px; cursor:pointer; height:48px; display:flex;
