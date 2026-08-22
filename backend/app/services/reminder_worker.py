@@ -78,7 +78,7 @@ async def fire_due_reminders() -> int:
         # Batch update: mark all successfully sent reminders as done in one query
         if sent_ids:
             await db.execute(
-                text("UPDATE reminders SET done=true, updated_at=NOW() WHERE id = ANY(:ids::uuid[])"),
+                text("UPDATE reminders SET done=true, updated_at=NOW() WHERE id::text = ANY(:ids)"),
                 {"ids": sent_ids}
             )
         await db.commit()
